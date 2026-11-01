@@ -1,0 +1,42 @@
+﻿CREATE TABLE IF NOT EXISTS users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('STUDENT', 'TEACHER', 'ADMIN') DEFAULT 'STUDENT',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS problems (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    time_limit_ms INT DEFAULT 1000,
+    memory_limit_mb INT DEFAULT 256,
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS test_cases (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    problem_id BIGINT NOT NULL,
+    input_data TEXT NOT NULL,
+    expected_output TEXT NOT NULL,
+    is_sample BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS submissions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    problem_id BIGINT NOT NULL,
+    language ENUM('C', 'CPP', 'JAVA', 'PYTHON') NOT NULL,
+    source_code TEXT NOT NULL,
+    status ENUM('PENDING', 'ACCEPTED', 'WRONG_ANSWER', 'TIME_LIMIT_EXCEEDED', 'COMPILE_ERROR', 'RUNTIME_ERROR') DEFAULT 'PENDING',
+    execution_time_ms INT,
+    memory_used_kb INT,
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE
+);

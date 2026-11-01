@@ -1,0 +1,16 @@
+﻿version: '3.8'
+services:
+  db:
+    image: mysql:8.0
+    container_name: vku_judge_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: vku_judge
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - db_data:/var/lib/mysql
+volumes:
+  db_data:
