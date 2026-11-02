@@ -11,11 +11,25 @@ interface Problem {
   createdAt: string;
 }
 
+interface TestCase {
+  id: number;
+  problemId: number;
+  input: string;
+  expectedOutput: string;
+  isSample: boolean;
+}
+
 function App() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
+
+  // State quản lý TestCases của bài tập đang chọn
+  const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [tcInput, setTcInput] = useState("");
+  const [tcOutput, setTcOutput] = useState("");
+  const [tcSample, setTcSample] = useState(true);
 
   // State cho form thêm bài tập mới
   const [title, setTitle] = useState("");
@@ -28,9 +42,7 @@ function App() {
     try {
       setLoading(true);
       const response = await fetch("http://localhost:8080/api/problems");
-      if (!response.ok) {
-        throw new Error("Không thể tải danh sách bài tập từ Server");
-      }
+      if (!response.ok) throw new Error("Không thể tải danh sách bài tập");
       const data = await response.json();
       setProblems(data);
       setError(null);
@@ -41,35 +53,72 @@ function App() {
     }
   };
 
+  const fetchTestCases = async (problemId: number) => {
+    try {
+      const response = await fetch(
+        `http://localhost:8080/api/testcases/problem/${problemId}`,
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setTestCases(data);
+      }
+    } catch (err) {
+      console.error("Lỗi tải test cases:", err);
+    }
+  };
+
   useEffect(() => {
     fetchProblems();
   }, []);
+
+  const handleSelectProblem = (prob: Problem) => {
+    setSelectedProblem(prob);
+    fetchTestCases(prob.id);
+  };
 
   const handleCreateProblem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) return;
 
-    try {
-      const response = await fetch("http://localhost:8080/api/problems", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          description,
-          difficulty,
-          timeLimit: 1000,
-          memoryLimit: 256,
-        }),
-      });
+    const response = await fetch("http://localhost:8080/api/problems", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        description,
+        difficulty,
+        timeLimit: 1000,
+        memoryLimit: 256,
+      }),
+    });
 
-      if (response.ok) {
-        setTitle("");
-        setDescription("");
-        setDifficulty("EASY");
-        fetchProblems();
-      }
-    } catch (err) {
-      alert("Lỗi khi thêm bài tập mới!");
+    if (response.ok) {
+      setTitle("");
+      setDescription("");
+      setDifficulty("EASY");
+      fetchProblems();
+    }
+  };
+
+  const handleCreateTestCase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProblem || !tcInput.trim() || !tcOutput.trim()) return;
+
+    const response = await fetch("http://localhost:8080/api/testcases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        problemId: selectedProblem.id,
+        input: tcInput,
+        expectedOutput: tcOutput,
+        isSample: tcSample,
+      }),
+    });
+
+    if (response.ok) {
+      setTcInput("");
+      setTcOutput("");
+      fetchTestCases(selectedProblem.id);
     }
   };
 
@@ -121,9 +170,9 @@ function App() {
                     <td>
                       <button
                         className="btn-view"
-                        onClick={() => setSelectedProblem(prob)}
+                        onClick={() => handleSelectProblem(prob)}
                       >
-                        Xem đề
+                        Xem đề & TestCase
                       </button>
                     </td>
                   </tr>
@@ -133,7 +182,7 @@ function App() {
           )}
         </div>
 
-        {/* Cột phải: Chi tiết bài tập & Form thêm bài tập */}
+        {/* Cột phải: Chi tiết bài tập + Quản lý TestCase & Form thêm bài tập */}
         <div className="side-panel">
           {selectedProblem && (
             <div className="card detail-card">
@@ -146,6 +195,60 @@ function App() {
                 {selectedProblem.memoryLimit}MB
               </p>
               <div className="detail-desc">{selectedProblem.description}</div>
+
+              <hr style={{ borderColor: "#334155", margin: "16px 0" }} />
+              <h4>Bộ Test Cases ({testCases.length})</h4>
+              {testCases.map((tc, index) => (
+                <div
+                  key={tc.id}
+                  className="detail-desc"
+                  style={{ fontSize: "0.85rem" }}
+                >
+                  <strong>
+                    Test #{index + 1} {tc.isSample ? "(Mẫu)" : "(Ẩn)"}:
+                  </strong>
+                  <div>
+                    Input: <code>{tc.input}</code>
+                  </div>
+                  <div>
+                    Output: <code>{tc.expectedOutput}</code>
+                  </div>
+                </div>
+              ))}
+
+              <form
+                onSubmit={handleCreateTestCase}
+                style={{ marginTop: "12px" }}
+              >
+                <div className="form-group">
+                  <label>Thêm Input mới:</label>
+                  <input
+                    type="text"
+                    value={tcInput}
+                    onChange={(e) => setTcInput(e.target.value)}
+                    placeholder="VD: 3 5"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Expected Output (Kết quả đúng):</label>
+                  <input
+                    type="text"
+                    value={tcOutput}
+                    onChange={(e) => setTcOutput(e.target.value)}
+                    placeholder="VD: 8"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="btn-submit"
+                  style={{ marginBottom: "10px" }}
+                >
+                  + Thêm Test Case
+                </button>
+              </form>
+
               <button
                 className="btn-close"
                 onClick={() => setSelectedProblem(null)}
@@ -186,7 +289,7 @@ function App() {
               <div className="form-group">
                 <label>Mô tả đề bài:</label>
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Nhập nội dung chi tiết đề bài..."
