@@ -1,5 +1,6 @@
 package vn.vku.judge.backend.controller;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.vku.judge.backend.entity.Submission;
 import vn.vku.judge.backend.repository.SubmissionRepository;
@@ -9,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/submissions")
-@CrossOrigin(origins = "http://localhost:5173")
 public class SubmissionController {
 
     private final SubmissionRepository submissionRepository;
@@ -20,7 +20,7 @@ public class SubmissionController {
         this.judgeService = judgeService;
     }
 
-    // Lấy toàn bộ lịch sử nộp bài
+    // Lấy toàn bộ lịch sử nộp bài (mới nhất trước)
     @GetMapping
     public List<Submission> getAllSubmissions() {
         return submissionRepository.findAllByOrderByIdDesc();
@@ -32,9 +32,20 @@ public class SubmissionController {
         return submissionRepository.findByProblemIdOrderByIdDesc(problemId);
     }
 
-    // Nộp code và chấm tự động ngay lập tức
+    // Lấy chi tiết 1 submission theo ID (dùng cho polling)
+    @GetMapping("/{id}")
+    public ResponseEntity<Submission> getSubmissionById(@PathVariable Long id) {
+        return submissionRepository.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Nộp code: lưu PENDING ngay → chấm bài async trong background
+     * → Frontend polling GET /{id} để lấy kết quả cuối cùng.
+     */
     @PostMapping
     public Submission submitCode(@RequestBody Submission submission) {
-        return judgeService.judge(submission);
+        return judgeService.submitAndJudgeAsync(submission);
     }
 }

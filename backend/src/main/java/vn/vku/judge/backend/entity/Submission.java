@@ -1,15 +1,24 @@
 package vn.vku.judge.backend.entity;
 
 import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "submissions")
+@Data
+@NoArgsConstructor
 public class Submission {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // user_id: có thể null khi chưa có hệ thống xác thực
+    @Column(name = "user_id")
+    private Long userId = 1L;
 
     @Column(name = "problem_id", nullable = false)
     private Long problemId;
@@ -20,33 +29,20 @@ public class Submission {
     @Column(name = "source_code", nullable = false, columnDefinition = "TEXT")
     private String sourceCode;
 
-    @Column(length = 30)
-    private String status = "PENDING"; // ACCEPTED, WRONG_ANSWER, TIME_LIMIT_EXCEEDED, COMPILE_ERROR, RUNTIME_ERROR
+    @Column(length = 50)
+    private String status = "PENDING";
+    // ACCEPTED, WRONG_ANSWER, TIME_LIMIT_EXCEEDED, COMPILE_ERROR, RUNTIME_ERROR
 
-    @Column(name = "execution_time")
+    @Column(name = "execution_time_ms")
     private Integer executionTime = 0;
+
+    @Column(name = "memory_used_kb")
+    private Integer memoryUsed = 0;
+
+    // Lưu thông báo lỗi biên dịch nếu có
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
 
     @Column(name = "submitted_at", insertable = false, updatable = false)
     private LocalDateTime submittedAt;
-
-    // Getters và Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
-    public Long getProblemId() { return problemId; }
-    public void setProblemId(Long problemId) { this.problemId = problemId; }
-
-    public String getLanguage() { return language; }
-    public void setLanguage(String language) { this.language = language; }
-
-    public String getSourceCode() { return sourceCode; }
-    public void setSourceCode(String sourceCode) { this.sourceCode = sourceCode; }
-
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
-    public Integer getExecutionTime() { return executionTime; }
-    public void setExecutionTime(Integer executionTime) { this.executionTime = executionTime; }
-
-    public LocalDateTime getSubmittedAt() { return submittedAt; }
 }
