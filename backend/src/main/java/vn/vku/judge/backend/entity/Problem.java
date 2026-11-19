@@ -34,6 +34,9 @@ public class Problem {
     @Column(name = "memory_limit_mb")
     private Integer memoryLimit = 256;
 
+    @Column(name = "created_by")
+    private Long createdBy;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 

@@ -7,9 +7,10 @@ TRUNCATE TABLE problems;
 TRUNCATE TABLE users;
 SET FOREIGN_KEY_CHECKS = 1;
 
--- 1. Demo User
-INSERT INTO users (id, username, email, password_hash, role)
-VALUES (1, 'demo_student', 'demo@vku.edu.vn', '123456', 'STUDENT');
+-- 1. Demo Users (Student & Teacher)
+INSERT INTO users (id, username, email, password_hash, role) VALUES 
+(1, 'demo_student', 'demo@vku.edu.vn', '123456', 'STUDENT'),
+(2, 'demo_teacher', 'teacher@vku.edu.vn', '123456', 'TEACHER');
 
 -- 2. Problems
 INSERT INTO problems (id, title, description, difficulty, time_limit_ms, memory_limit_mb, created_by)
