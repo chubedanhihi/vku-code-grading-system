@@ -59,6 +59,17 @@ interface LeaderboardEntry {
   tier: "MASTER" | "GOLD" | "SILVER" | "BRONZE";
 }
 
+interface AiAnalyzeResponse {
+  success: boolean;
+  modelName: string;
+  diagnosis: string;
+  hints: string[];
+  timeComplexity: string;
+  spaceComplexity: string;
+  optimizationTips: string;
+  detailedAnalysis: string;
+}
+
 // ===========================
 // Constants
 // ===========================
@@ -159,6 +170,13 @@ function App() {
   const [lbLoading, setLbLoading] = useState(false);
   const [lbSearch, setLbSearch] = useState("");
 
+  // AI Assistant State
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiData, setAiData] = useState<AiAnalyzeResponse | null>(null);
+  const [aiTargetSub, setAiTargetSub] = useState<Submission | null>(null);
+  const [aiCustomQuestion, setAiCustomQuestion] = useState("");
+
   // Code editor
   const [lang, setLang] = useState<Lang>("CPP");
   const [code, setCode] = useState(LANG_META.CPP.default);
@@ -235,6 +253,52 @@ function App() {
   useEffect(() => {
     fetchProblems();
   }, [fetchProblems]);
+
+  // ===========================
+  // AI Assistant Actions
+  // ===========================
+  const handleAskAi = async (sub?: Submission, customQuestion?: string) => {
+    if (!selectedProblem) return;
+    const targetSub = sub || submissions[0];
+    setAiTargetSub(targetSub || null);
+    setAiModalOpen(true);
+    setAiLoading(true);
+
+    try {
+      const res = await fetch(`${API}/ai/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemTitle: selectedProblem.title,
+          problemDescription: selectedProblem.description,
+          language: targetSub ? targetSub.language : lang,
+          sourceCode: targetSub ? targetSub.sourceCode : code,
+          verdict: targetSub ? targetSub.status : "PENDING",
+          errorMessage: targetSub?.errorMessage || "",
+          timeLimit: selectedProblem.timeLimit,
+          memoryLimit: selectedProblem.memoryLimit,
+          userQuestion: customQuestion || "",
+        }),
+      });
+
+      if (res.ok) {
+        setAiData(await res.json());
+      } else {
+        toast.error("Không thể kết nối tới dịch vụ AI.");
+      }
+    } catch {
+      toast.error("Lỗi khi gửi yêu cầu phân tích tới AI.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleSendCustomAiQuestion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiCustomQuestion.trim() || aiLoading) return;
+    handleAskAi(aiTargetSub || undefined, aiCustomQuestion.trim());
+    setAiCustomQuestion("");
+  };
 
   // ===========================
   // Authentication Actions
@@ -1294,8 +1358,8 @@ function App() {
                       />
                     </div>
 
-                    {/* Submit button */}
-                    <div style={{ marginTop: 14 }}>
+                    {/* Submit button & AI Assistant trigger */}
+                    <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                       {judgingId ? (
                         <div className="judging-indicator">
                           <div className="judging-dots">
@@ -1304,14 +1368,24 @@ function App() {
                           Đang biên dịch và chấm bài (#{judgingId})...
                         </div>
                       ) : (
-                        <button
-                          id="btn-submit-code"
-                          type="submit"
-                          className={`btn btn-success ${submitting ? "btn-loading" : ""}`}
-                          disabled={submitting || !code.trim()}
-                        >
-                          {!submitting && "🚀 Nộp bài (Submit Code)"}
-                        </button>
+                        <>
+                          <button
+                            id="btn-submit-code"
+                            type="submit"
+                            className={`btn btn-success ${submitting ? "btn-loading" : ""}`}
+                            disabled={submitting || !code.trim()}
+                          >
+                            {!submitting && "🚀 Nộp bài (Submit Code)"}
+                          </button>
+                          <button
+                            id="btn-trigger-ai"
+                            type="button"
+                            className="btn btn-ai"
+                            onClick={() => handleAskAi()}
+                          >
+                            🤖 Trợ lý AI phân tích code
+                          </button>
+                        </>
                       )}
                     </div>
                   </form>
@@ -1374,6 +1448,7 @@ function App() {
                           <th>Kết quả</th>
                           <th>Thời gian</th>
                           <th>Nộp lúc</th>
+                          <th>Trợ lý AI</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1398,6 +1473,15 @@ function App() {
                             </td>
                             <td style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                               {fmtDate(sub.submittedAt)}
+                            </td>
+                            <td>
+                              <button
+                                className="btn-ai-sm"
+                                onClick={() => handleAskAi(sub)}
+                                title="Nhờ AI phân tích lỗi bài nộp này"
+                              >
+                                🤖 Hỏi AI
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -1496,6 +1580,121 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* ===== AI ASSISTANT MODAL ===== */}
+      {aiModalOpen && (
+        <div className="ai-modal-overlay" onClick={() => setAiModalOpen(false)}>
+          <div className="ai-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="ai-modal-header">
+              <div className="ai-header-left">
+                <span style={{ fontSize: "1.4rem" }}>🤖</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "var(--text-primary)" }}>
+                    Trợ lý Lập trình AI — VKU Assistant
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    {selectedProblem?.title} ({aiTargetSub?.language || lang})
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {aiData && <span className="ai-badge-model">{aiData.modelName}</span>}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: "4px 8px", fontSize: "1rem" }}
+                  onClick={() => setAiModalOpen(false)}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="ai-modal-body">
+              {aiLoading ? (
+                <div className="ai-pulse-loader">
+                  <div className="ai-pulse-dot">⚡</div>
+                  <div style={{ fontWeight: 600, color: "#c084fc", fontSize: "0.95rem" }}>
+                    Trợ lý AI đang phân tích mã nguồn và thuật toán...
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    Đang kiểm tra lỗi cú pháp, tính đúng đắn và độ phức tạp
+                  </div>
+                </div>
+              ) : aiData ? (
+                <>
+                  {/* Diagnosis */}
+                  <div className={`ai-diagnosis-card ${aiTargetSub?.status === "ACCEPTED" ? "accepted" : ""}`}>
+                    <div className="ai-card-title">
+                      <span>{aiTargetSub?.status === "ACCEPTED" ? "🎉" : "🔍"}</span>
+                      <span>Chẩn đoán của Trợ lý AI</span>
+                    </div>
+                    <div className="ai-diagnosis-text">{aiData.diagnosis}</div>
+                  </div>
+
+                  {/* 3 Metrics */}
+                  <div className="ai-metrics-grid">
+                    <div className="ai-metric-box">
+                      <div className="ai-metric-label">⏱️ Độ phức tạp thời gian</div>
+                      <div className="ai-metric-val">{aiData.timeComplexity}</div>
+                    </div>
+                    <div className="ai-metric-box">
+                      <div className="ai-metric-label">💾 Bộ nhớ ước lượng</div>
+                      <div className="ai-metric-val">{aiData.spaceComplexity}</div>
+                    </div>
+                    <div className="ai-metric-box">
+                      <div className="ai-metric-label">💡 Mẹo tối ưu</div>
+                      <div className="ai-metric-val" style={{ fontSize: "0.8rem", fontWeight: 500 }}>
+                        {aiData.optimizationTips}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pedagogical Hints */}
+                  {aiData.hints && aiData.hints.length > 0 && (
+                    <div className="ai-hints-box">
+                      <div className="ai-card-title" style={{ color: "#fbbf24" }}>
+                        <span>💡 Gợi ý giải pháp (Socratic Hints)</span>
+                      </div>
+                      {aiData.hints.map((hint, idx) => (
+                        <div key={idx} className="ai-hint-item">
+                          <span>Gợi ý #{idx + 1}:</span>
+                          <span>{hint}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Detailed Markdown Analysis */}
+                  <div className="ai-markdown-content">{aiData.detailedAnalysis}</div>
+
+                  {/* Ask Follow-up question */}
+                  <form onSubmit={handleSendCustomAiQuestion}>
+                    <div className="ai-card-title" style={{ marginTop: 8 }}>
+                      <span>💬 Đặt câu hỏi thêm cho Trợ lý AI</span>
+                    </div>
+                    <div className="ai-ask-box">
+                      <input
+                        type="text"
+                        className="form-input ai-ask-input"
+                        placeholder="VD: Tại sao test case số âm lại bị sai? Có cách nào tối ưu bộ nhớ hơn không?"
+                        value={aiCustomQuestion}
+                        onChange={(e) => setAiCustomQuestion(e.target.value)}
+                      />
+                      <button type="submit" className="btn btn-ai" disabled={!aiCustomQuestion.trim()}>
+                        Hỏi AI 🚀
+                      </button>
+                    </div>
+                  </form>
+                </>
+              ) : (
+                <div className="empty-state">
+                  <p>Chưa có dữ liệu phân tích từ AI.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
