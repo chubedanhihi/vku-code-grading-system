@@ -45,6 +45,20 @@ interface Submission {
   submittedAt: string;
 }
 
+interface LeaderboardEntry {
+  rank: number;
+  userId: number;
+  username: string;
+  email: string;
+  role: string;
+  solvedCount: number;
+  totalSubmissions: number;
+  acceptedSubmissions: number;
+  accuracyRate: number;
+  totalScore: number;
+  tier: "MASTER" | "GOLD" | "SILVER" | "BRONZE";
+}
+
 // ===========================
 // Constants
 // ===========================
@@ -97,7 +111,7 @@ const VERDICT_ICONS: Record<string, string> = {
 // ===========================
 // App Views
 // ===========================
-type View = "problems" | "submit" | "add-problem" | "login" | "register";
+type View = "problems" | "submit" | "add-problem" | "login" | "register" | "leaderboard";
 
 // ===========================
 // Main App
@@ -139,6 +153,11 @@ function App() {
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [subFilter, setSubFilter] = useState<"all" | "my">("all");
+
+  // Leaderboard State
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [lbLoading, setLbLoading] = useState(false);
+  const [lbSearch, setLbSearch] = useState("");
 
   // Code editor
   const [lang, setLang] = useState<Lang>("CPP");
@@ -196,6 +215,20 @@ function App() {
       if (res.ok) setSubmissions(await res.json());
     } catch {
       /* silent */
+    }
+  }, []);
+
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      setLbLoading(true);
+      const res = await fetch(`${API}/leaderboard`);
+      if (res.ok) {
+        setLeaderboard(await res.json());
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setLbLoading(false);
     }
   }, []);
 
@@ -386,7 +419,7 @@ function App() {
     if (!selectedProblem || !code.trim() || submitting) return;
 
     if (!user) {
-      toast("Vui lòng đăng nhập để lưu kết quả nộp bài vào hồ sơ cá nhân!", {
+      toast("Vui lòng đăng nhập để lưu kết quả nộp bài vào bảng xếp hạng!", {
         icon: "💡",
         duration: 4000,
       });
@@ -555,6 +588,23 @@ function App() {
 
   const isTeacherOrAdmin = user?.role === "TEACHER" || user?.role === "ADMIN";
 
+  // Filter leaderboard by search
+  const filteredLeaderboard = leaderboard.filter((item) =>
+    item.username.toLowerCase().includes(lbSearch.toLowerCase()) ||
+    item.email.toLowerCase().includes(lbSearch.toLowerCase())
+  );
+
+  // Leaderboard Statistics
+  const totalCompetitors = leaderboard.length;
+  const totalAllSubs = leaderboard.reduce((acc, cur) => acc + cur.totalSubmissions, 0);
+  const totalAllSolved = leaderboard.reduce((acc, cur) => acc + cur.solvedCount, 0);
+  const maxScore = leaderboard.length > 0 ? Math.max(...leaderboard.map((e) => e.totalScore)) : 0;
+
+  // Podium Top 3
+  const top1 = leaderboard[0];
+  const top2 = leaderboard[1];
+  const top3 = leaderboard[2];
+
   // ===========================
   // RENDER
   // ===========================
@@ -580,6 +630,16 @@ function App() {
               onClick={() => setView("problems")}
             >
               📋 Bài tập
+            </button>
+            <button
+              id="nav-leaderboard"
+              className={`nav-tab ${view === "leaderboard" ? "active" : ""}`}
+              onClick={() => {
+                setView("leaderboard");
+                fetchLeaderboard();
+              }}
+            >
+              🏆 Xếp hạng
             </button>
             {selectedProblem && (
               <button
@@ -644,6 +704,174 @@ function App() {
 
       {/* ===== MAIN CONTENT ===== */}
       <main className="app-main">
+
+        {/* ========== VIEW: LEADERBOARD (BẢNG XẾP HẠNG) ========== */}
+        {view === "leaderboard" && (
+          <div className="leaderboard-container">
+            {/* Stats Row */}
+            <div className="leaderboard-stats">
+              <div className="lb-stat-card">
+                <div className="lb-stat-icon">👥</div>
+                <div>
+                  <div className="lb-stat-val">{totalCompetitors}</div>
+                  <div className="lb-stat-lbl">Thí sinh tham gia</div>
+                </div>
+              </div>
+              <div className="lb-stat-card">
+                <div className="lb-stat-icon">🎯</div>
+                <div>
+                  <div className="lb-stat-val">{totalAllSolved}</div>
+                  <div className="lb-stat-lbl">Bài đã giải (AC)</div>
+                </div>
+              </div>
+              <div className="lb-stat-card">
+                <div className="lb-stat-icon">🚀</div>
+                <div>
+                  <div className="lb-stat-val">{totalAllSubs}</div>
+                  <div className="lb-stat-lbl">Lần nộp code</div>
+                </div>
+              </div>
+              <div className="lb-stat-card">
+                <div className="lb-stat-icon">👑</div>
+                <div>
+                  <div className="lb-stat-val">{maxScore} pts</div>
+                  <div className="lb-stat-lbl">Điểm cao nhất</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Top 3 Podium */}
+            {leaderboard.length > 0 && (
+              <div className="podium-wrapper">
+                {/* Hạng 2 */}
+                {top2 && (
+                  <div className="podium-card rank-2">
+                    <div className="podium-avatar">{top2.username.charAt(0).toUpperCase()}</div>
+                    <div className="podium-rank-badge">🥈 HẠNG 2</div>
+                    <div className="podium-username">{top2.username}</div>
+                    <div className="podium-score">{top2.totalScore} pts</div>
+                    <div className="podium-solved">🎯 Giải được {top2.solvedCount} bài</div>
+                  </div>
+                )}
+
+                {/* Hạng 1 */}
+                {top1 && (
+                  <div className="podium-card rank-1">
+                    <div className="podium-crown">👑</div>
+                    <div className="podium-avatar">{top1.username.charAt(0).toUpperCase()}</div>
+                    <div className="podium-rank-badge">🥇 QUÁN QUÂN</div>
+                    <div className="podium-username">{top1.username}</div>
+                    <div className="podium-score">{top1.totalScore} pts</div>
+                    <div className="podium-solved">🎯 Giải được {top1.solvedCount} bài ({top1.accuracyRate}% AC)</div>
+                  </div>
+                )}
+
+                {/* Hạng 3 */}
+                {top3 && (
+                  <div className="podium-card rank-3">
+                    <div className="podium-avatar">{top3.username.charAt(0).toUpperCase()}</div>
+                    <div className="podium-rank-badge">🥉 HẠNG 3</div>
+                    <div className="podium-username">{top3.username}</div>
+                    <div className="podium-score">{top3.totalScore} pts</div>
+                    <div className="podium-solved">🎯 Giải được {top3.solvedCount} bài</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Leaderboard Table Card */}
+            <div className="card">
+              <div className="section-header">
+                <div className="section-title">
+                  🏆 Bảng Xếp Hạng Chi Tiết
+                  <span className="count-badge">{filteredLeaderboard.length}</span>
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    style={{ width: 220, padding: "6px 12px", fontSize: "0.85rem" }}
+                    placeholder="🔍 Tìm thí sinh..."
+                    value={lbSearch}
+                    onChange={(e) => setLbSearch(e.target.value)}
+                  />
+                  <button className="btn btn-ghost btn-sm" onClick={fetchLeaderboard} title="Làm mới">
+                    🔄
+                  </button>
+                </div>
+              </div>
+
+              {lbLoading ? (
+                <div className="loading-state">
+                  <div className="spinner" />
+                  <p>Đang cập nhật bảng xếp hạng...</p>
+                </div>
+              ) : filteredLeaderboard.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">🏆</div>
+                  <p>Chưa có dữ liệu thí sinh nào.</p>
+                </div>
+              ) : (
+                <table className="lb-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 60 }}>Hạng</th>
+                      <th>Thí sinh</th>
+                      <th>Danh hiệu</th>
+                      <th>Điểm số</th>
+                      <th>Bài đã giải</th>
+                      <th>Tỷ lệ AC</th>
+                      <th>Tổng nộp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeaderboard.map((item) => {
+                      const isMe = user?.id === item.userId;
+                      return (
+                        <tr key={item.userId} className={`lb-row ${isMe ? "my-row" : ""}`}>
+                          <td>
+                            <span
+                              className={`lb-rank-num ${
+                                item.rank === 1 ? "top-1" : item.rank === 2 ? "top-2" : item.rank === 3 ? "top-3" : ""
+                              }`}
+                            >
+                              {item.rank === 1 ? "🥇 #1" : item.rank === 2 ? "🥈 #2" : item.rank === 3 ? "🥉 #3" : `#${item.rank}`}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="lb-user-cell">
+                              <div className="lb-avatar">{item.username.charAt(0).toUpperCase()}</div>
+                              <div>
+                                <span className="lb-user-name">{item.username}</span>
+                                {isMe && <span className="lb-user-you">Bạn</span>}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`tier-badge tier-${item.tier.toLowerCase()}`}>
+                              {item.tier === "MASTER" && "💎 MASTER"}
+                              {item.tier === "GOLD" && "🥇 GOLD"}
+                              {item.tier === "SILVER" && "🥈 SILVER"}
+                              {item.tier === "BRONZE" && "🥉 BRONZE"}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="lb-score-val">{item.totalScore}</span> pts
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{item.solvedCount} bài</td>
+                          <td style={{ color: item.accuracyRate >= 50 ? "#34d399" : "var(--text-secondary)" }}>
+                            {item.accuracyRate}%
+                          </td>
+                          <td style={{ color: "var(--text-muted)" }}>{item.totalSubmissions}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ========== VIEW: LOGIN ========== */}
         {view === "login" && (
