@@ -32,6 +32,18 @@ public class SubmissionController {
         return submissionRepository.findByProblemIdOrderByIdDesc(problemId);
     }
 
+    // Lấy bài nộp theo bài tập của 1 user cụ thể
+    @GetMapping("/problem/{problemId}/user/{userId}")
+    public List<Submission> getSubmissionsByProblemAndUser(@PathVariable Long problemId, @PathVariable Long userId) {
+        return submissionRepository.findByProblemIdAndUserIdOrderByIdDesc(problemId, userId);
+    }
+
+    // Lấy tất cả bài nộp của 1 user
+    @GetMapping("/user/{userId}")
+    public List<Submission> getSubmissionsByUser(@PathVariable Long userId) {
+        return submissionRepository.findByUserIdOrderByIdDesc(userId);
+    }
+
     // Lấy chi tiết 1 submission theo ID (dùng cho polling)
     @GetMapping("/{id}")
     public ResponseEntity<Submission> getSubmissionById(@PathVariable Long id) {

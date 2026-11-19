@@ -12,8 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Tạo user mặc định để demo (không cần đăng nhập)
-INSERT IGNORE INTO users (id, username, email, password_hash, role)
-VALUES (1, 'student_demo', 'demo@vku.edu.vn', 'hashed_password', 'STUDENT');
+INSERT IGNORE INTO users (id, username, email, password_hash, role) VALUES 
+(1, 'demo_student', 'demo@vku.edu.vn', '123456', 'STUDENT'),
+(2, 'demo_teacher', 'teacher@vku.edu.vn', '123456', 'TEACHER');
 
 CREATE TABLE IF NOT EXISTS problems (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

@@ -6,6 +6,13 @@ import "./App.css";
 // ===========================
 // Types
 // ===========================
+interface UserProfile {
+  id: number;
+  username: string;
+  email: string;
+  role: "STUDENT" | "TEACHER" | "ADMIN";
+}
+
 interface Problem {
   id: number;
   title: string;
@@ -13,6 +20,7 @@ interface Problem {
   difficulty: "EASY" | "MEDIUM" | "HARD";
   timeLimit: number;
   memoryLimit: number;
+  createdBy?: number;
   createdAt: string;
 }
 
@@ -89,7 +97,7 @@ const VERDICT_ICONS: Record<string, string> = {
 // ===========================
 // App Views
 // ===========================
-type View = "problems" | "submit" | "add-problem";
+type View = "problems" | "submit" | "add-problem" | "login" | "register";
 
 // ===========================
 // Main App
@@ -100,10 +108,37 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [connError, setConnError] = useState<string | null>(null);
 
+  // Authentication State
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem("vku_judge_user");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        /* empty */
+      }
+    }
+    return null;
+  });
+
+  // Login Form
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  // Register Form
+  const [regUsername, setRegUsername] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirmPassword, setRegConfirmPassword] = useState("");
+  const [regRole, setRegRole] = useState<"STUDENT" | "TEACHER">("STUDENT");
+  const [regLoading, setRegLoading] = useState(false);
+
   // Problem detail / submit view
   const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [subFilter, setSubFilter] = useState<"all" | "my">("all");
 
   // Code editor
   const [lang, setLang] = useState<Lang>("CPP");
@@ -151,9 +186,13 @@ function App() {
     }
   }, []);
 
-  const fetchSubmissions = useCallback(async (problemId: number) => {
+  const fetchSubmissions = useCallback(async (problemId: number, filter: "all" | "my", currentUserId?: number) => {
     try {
-      const res = await fetch(`${API}/submissions/problem/${problemId}`);
+      let url = `${API}/submissions/problem/${problemId}`;
+      if (filter === "my" && currentUserId) {
+        url = `${API}/submissions/problem/${problemId}/user/${currentUserId}`;
+      }
+      const res = await fetch(url);
       if (res.ok) setSubmissions(await res.json());
     } catch {
       /* silent */
@@ -165,15 +204,129 @@ function App() {
   }, [fetchProblems]);
 
   // ===========================
+  // Authentication Actions
+  // ===========================
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginUsername.trim() || !loginPassword) {
+      toast.error("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!");
+      return;
+    }
+    setLoginLoading(true);
+    try {
+      const res = await fetch(`${API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: loginUsername.trim(),
+          password: loginPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toast.error(data.message || "Đăng nhập thất bại!");
+        return;
+      }
+      const userProfile: UserProfile = {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        role: data.role,
+      };
+      setUser(userProfile);
+      localStorage.setItem("vku_judge_user", JSON.stringify(userProfile));
+      toast.success(`Chào mừng ${userProfile.username}! (${userProfile.role === "TEACHER" ? "Giảng viên" : "Sinh viên"})`);
+      setLoginUsername("");
+      setLoginPassword("");
+      setView("problems");
+    } catch {
+      toast.error("Lỗi kết nối tới máy chủ khi đăng nhập!");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regUsername.trim() || !regEmail.trim() || !regPassword) {
+      toast.error("Vui lòng điền đầy đủ các thông tin!");
+      return;
+    }
+    if (regPassword.length < 6) {
+      toast.error("Mật khẩu phải có ít nhất 6 ký tự!");
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      toast.error("Mật khẩu xác nhận không khớp!");
+      return;
+    }
+    setRegLoading(true);
+    try {
+      const res = await fetch(`${API}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: regUsername.trim(),
+          email: regEmail.trim(),
+          password: regPassword,
+          role: regRole,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toast.error(data.message || "Đăng ký thất bại!");
+        return;
+      }
+      const userProfile: UserProfile = {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        role: data.role,
+      };
+      setUser(userProfile);
+      localStorage.setItem("vku_judge_user", JSON.stringify(userProfile));
+      toast.success("Tạo tài khoản thành công! Đã tự động đăng nhập.");
+      setRegUsername("");
+      setRegEmail("");
+      setRegPassword("");
+      setRegConfirmPassword("");
+      setView("problems");
+    } catch {
+      toast.error("Lỗi kết nối tới máy chủ khi đăng ký!");
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem("vku_judge_user");
+    toast.success("Đã đăng xuất thành công!");
+    setView("problems");
+  };
+
+  const fillQuickDemo = (role: "student" | "teacher") => {
+    if (role === "student") {
+      setLoginUsername("demo_student");
+      setLoginPassword("123456");
+    } else {
+      setLoginUsername("demo_teacher");
+      setLoginPassword("123456");
+    }
+    toast("Đã điền tài khoản mẫu!", { icon: "⚡" });
+  };
+
+  // ===========================
   // Problem Selection
   // ===========================
   const handleSelectProblem = (prob: Problem) => {
     setSelectedProblem(prob);
     setTestCases([]);
     setSubmissions([]);
+    setSubFilter("all");
     setView("submit");
     fetchTestCases(prob.id);
-    fetchSubmissions(prob.id);
+    fetchSubmissions(prob.id, "all");
   };
 
   // ===========================
@@ -207,7 +360,7 @@ function App() {
         if (sub.status !== "PENDING") {
           stopPolling();
           setJudgingId(null);
-          fetchSubmissions(problemId);
+          fetchSubmissions(problemId, subFilter, user?.id);
 
           // Show result toast
           if (sub.status === "ACCEPTED") {
@@ -232,12 +385,20 @@ function App() {
     e.preventDefault();
     if (!selectedProblem || !code.trim() || submitting) return;
 
+    if (!user) {
+      toast("Vui lòng đăng nhập để lưu kết quả nộp bài vào hồ sơ cá nhân!", {
+        icon: "💡",
+        duration: 4000,
+      });
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch(`${API}/submissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          userId: user?.id ?? 1,
           problemId: selectedProblem.id,
           language: lang,
           sourceCode: code,
@@ -261,10 +422,14 @@ function App() {
   };
 
   // ===========================
-  // Add Problem
+  // Add Problem (Teacher / Admin only)
   // ===========================
   const handleCreateProblem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user || (user.role !== "TEACHER" && user.role !== "ADMIN")) {
+      toast.error("Chỉ Giảng viên mới có quyền tạo đề bài mới!");
+      return;
+    }
     if (!newTitle.trim() || !newDesc.trim()) return;
     setSavingProblem(true);
 
@@ -278,12 +443,16 @@ function App() {
           difficulty: newDiff,
           timeLimit: newTimeLimit,
           memoryLimit: newMemLimit,
+          createdBy: user.id,
         }),
       });
 
       if (!res.ok) throw new Error();
-      setNewTitle(""); setNewDesc(""); setNewDiff("EASY");
-      setNewTimeLimit(1000); setNewMemLimit(256);
+      setNewTitle("");
+      setNewDesc("");
+      setNewDiff("EASY");
+      setNewTimeLimit(1000);
+      setNewMemLimit(256);
       await fetchProblems();
       setView("problems");
       toast.success("✅ Đã thêm bài tập mới!", {
@@ -303,6 +472,11 @@ function App() {
     e.preventDefault();
     if (!selectedProblem || !tcInput.trim() || !tcOutput.trim()) return;
 
+    if (!user || (user.role !== "TEACHER" && user.role !== "ADMIN")) {
+      toast.error("Chỉ Giảng viên mới có quyền thêm test cases!");
+      return;
+    }
+
     try {
       const res = await fetch(`${API}/testcases`, {
         method: "POST",
@@ -316,7 +490,8 @@ function App() {
       });
 
       if (!res.ok) throw new Error();
-      setTcInput(""); setTcOutput("");
+      setTcInput("");
+      setTcOutput("");
       await fetchTestCases(selectedProblem.id);
       toast.success("Test case đã được thêm!", {
         style: { background: "#111827", color: "#34d399", border: "1px solid rgba(52,211,153,0.3)" },
@@ -330,6 +505,10 @@ function App() {
   // Delete Test Case
   // ===========================
   const handleDeleteTestCase = async (id: number) => {
+    if (!user || (user.role !== "TEACHER" && user.role !== "ADMIN")) {
+      toast.error("Chỉ Giảng viên mới có quyền xóa test case!");
+      return;
+    }
     try {
       await fetch(`${API}/testcases/${id}`, { method: "DELETE" });
       if (selectedProblem) fetchTestCases(selectedProblem.id);
@@ -343,6 +522,10 @@ function App() {
   // Delete Problem
   // ===========================
   const handleDeleteProblem = async (id: number) => {
+    if (!user || (user.role !== "TEACHER" && user.role !== "ADMIN")) {
+      toast.error("Chỉ Giảng viên mới có quyền xóa bài tập!");
+      return;
+    }
     if (!confirm("Bạn có chắc chắn muốn xóa bài tập này không?")) return;
     try {
       await fetch(`${API}/problems/${id}`, { method: "DELETE" });
@@ -360,9 +543,7 @@ function App() {
   // Cleanup polling on unmount
   useEffect(() => () => stopPolling(), []);
 
-  // ===========================
-  // Helper: Format date
-  // ===========================
+  // Format date helper
   const fmtDate = (d: string) => {
     if (!d) return "—";
     try {
@@ -371,6 +552,8 @@ function App() {
       return d;
     }
   };
+
+  const isTeacherOrAdmin = user?.role === "TEACHER" || user?.role === "ADMIN";
 
   // ===========================
   // RENDER
@@ -407,24 +590,244 @@ function App() {
                 💻 Làm bài
               </button>
             )}
-            <button
-              id="nav-add"
-              className={`nav-tab ${view === "add-problem" ? "active" : ""}`}
-              onClick={() => setView("add-problem")}
-            >
-              ➕ Thêm bài
-            </button>
+            {isTeacherOrAdmin && (
+              <button
+                id="nav-add"
+                className={`nav-tab ${view === "add-problem" ? "active" : ""}`}
+                onClick={() => setView("add-problem")}
+              >
+                ➕ Thêm bài
+              </button>
+            )}
           </nav>
 
-          <div className="header-status">
-            <div className="status-dot" />
-            <span>Backend :8080</span>
+          {/* User Auth Section */}
+          <div className="header-auth">
+            {user ? (
+              <div className="user-profile-chip">
+                <div className="user-avatar">{user.username.charAt(0).toUpperCase()}</div>
+                <span className="user-name">{user.username}</span>
+                <span className={`user-role-tag ${user.role === "TEACHER" ? "role-teacher" : "role-student"}`}>
+                  {user.role === "TEACHER" ? "Giảng viên" : "Sinh viên"}
+                </span>
+                <button
+                  id="btn-logout"
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: "2px 8px", fontSize: "0.75rem", marginLeft: 4 }}
+                  onClick={handleLogout}
+                  title="Đăng xuất"
+                >
+                  🚪 Thoát
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  id="btn-nav-login"
+                  className={`btn btn-sm ${view === "login" ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setView("login")}
+                >
+                  🔑 Đăng nhập
+                </button>
+                <button
+                  id="btn-nav-register"
+                  className={`btn btn-sm ${view === "register" ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setView("register")}
+                >
+                  📝 Đăng ký
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* ===== MAIN ===== */}
+      {/* ===== MAIN CONTENT ===== */}
       <main className="app-main">
+
+        {/* ========== VIEW: LOGIN ========== */}
+        {view === "login" && (
+          <div className="auth-wrapper">
+            <div className="card">
+              <div className="auth-header">
+                <div className="auth-icon">🔐</div>
+                <h2 className="auth-title">Đăng nhập tài khoản</h2>
+                <p className="auth-desc">Đăng nhập để làm bài, nộp code và theo dõi tiến độ học tập</p>
+              </div>
+
+              <form onSubmit={handleLogin}>
+                <div className="form-group">
+                  <label className="form-label">Tên đăng nhập hoặc Email</label>
+                  <input
+                    id="inp-login-username"
+                    type="text"
+                    className="form-input"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    placeholder="VD: demo_student hoặc student@vku.edu.vn"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Mật khẩu</label>
+                  <input
+                    id="inp-login-password"
+                    type="password"
+                    className="form-input"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+
+                <button
+                  id="btn-submit-login"
+                  type="submit"
+                  className={`btn btn-primary ${loginLoading ? "btn-loading" : ""}`}
+                  style={{ width: "100%", marginTop: 8 }}
+                  disabled={loginLoading}
+                >
+                  {!loginLoading && "🚀 Đăng nhập"}
+                </button>
+              </form>
+
+              {/* Quick Demo Logins */}
+              <div className="quick-demo-box">
+                <div className="quick-demo-title">
+                  <span>⚡ Tài khoản thử nghiệm nhanh (1-Click)</span>
+                </div>
+                <div className="quick-demo-btns">
+                  <button
+                    type="button"
+                    className="quick-demo-btn"
+                    onClick={() => fillQuickDemo("student")}
+                  >
+                    👨‍🎓 Sinh viên (demo_student)
+                  </button>
+                  <button
+                    type="button"
+                    className="quick-demo-btn"
+                    onClick={() => fillQuickDemo("teacher")}
+                  >
+                    👨‍🏫 Giảng viên (demo_teacher)
+                  </button>
+                </div>
+              </div>
+
+              <div className="auth-switch">
+                Chưa có tài khoản?
+                <a onClick={() => setView("register")}>Đăng ký ngay</a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========== VIEW: REGISTER ========== */}
+        {view === "register" && (
+          <div className="auth-wrapper">
+            <div className="card">
+              <div className="auth-header">
+                <div className="auth-icon">📝</div>
+                <h2 className="auth-title">Tạo tài khoản mới</h2>
+                <p className="auth-desc">Tham gia hệ thống chấm bài trực tuyến VKU Code Grading</p>
+              </div>
+
+              <form onSubmit={handleRegister}>
+                <div className="form-group">
+                  <label className="form-label">Tên đăng nhập *</label>
+                  <input
+                    id="inp-reg-username"
+                    type="text"
+                    className="form-input"
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value)}
+                    placeholder="VD: nguyen_van_a"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Địa chỉ Email *</label>
+                  <input
+                    id="inp-reg-email"
+                    type="email"
+                    className="form-input"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    placeholder="VD: a.nv@vku.udn.vn"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Bạn là ai? (Chọn vai trò) *</label>
+                  <div className="role-options">
+                    <div
+                      className={`role-card ${regRole === "STUDENT" ? "selected" : ""}`}
+                      onClick={() => setRegRole("STUDENT")}
+                    >
+                      <div className="role-card-icon">👨‍🎓</div>
+                      <div className="role-card-title">Sinh viên</div>
+                      <div className="role-card-desc">Làm bài & nộp code</div>
+                    </div>
+                    <div
+                      className={`role-card ${regRole === "TEACHER" ? "selected" : ""}`}
+                      onClick={() => setRegRole("TEACHER")}
+                    >
+                      <div className="role-card-icon">👨‍🏫</div>
+                      <div className="role-card-title">Giảng viên</div>
+                      <div className="role-card-desc">Tạo bài & test cases</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Mật khẩu (ít nhất 6 ký tự) *</label>
+                  <input
+                    id="inp-reg-password"
+                    type="password"
+                    className="form-input"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Xác nhận mật khẩu *</label>
+                  <input
+                    id="inp-reg-confirm"
+                    type="password"
+                    className="form-input"
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+
+                <button
+                  id="btn-submit-register"
+                  type="submit"
+                  className={`btn btn-success ${regLoading ? "btn-loading" : ""}`}
+                  style={{ width: "100%", marginTop: 8 }}
+                  disabled={regLoading}
+                >
+                  {!regLoading && "✨ Hoàn tất đăng ký"}
+                </button>
+              </form>
+
+              <div className="auth-switch">
+                Đã có tài khoản?
+                <a onClick={() => setView("login")}>Đăng nhập</a>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ========== VIEW: PROBLEM LIST ========== */}
         {view === "problems" && (
@@ -476,18 +879,26 @@ function App() {
                       <button
                         id={`btn-view-${prob.id}`}
                         className="btn btn-primary btn-sm"
-                        onClick={(e) => { e.stopPropagation(); handleSelectProblem(prob); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectProblem(prob);
+                        }}
                       >
                         Làm bài →
                       </button>
-                      <button
-                        id={`btn-delete-${prob.id}`}
-                        className="btn btn-danger btn-sm"
-                        title="Xóa bài tập"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteProblem(prob.id); }}
-                      >
-                        🗑
-                      </button>
+                      {isTeacherOrAdmin && (
+                        <button
+                          id={`btn-delete-${prob.id}`}
+                          className="btn btn-danger btn-sm"
+                          title="Xóa bài tập (Quyền Giảng viên)"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteProblem(prob.id);
+                          }}
+                        >
+                          🗑
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -541,13 +952,15 @@ function App() {
                           <span className="testcase-label">
                             Test #{idx + 1} {tc.isSample ? "🔓 Sample" : "🔒 Hidden"}
                           </span>
-                          <button
-                            id={`btn-del-tc-${tc.id}`}
-                            className="btn btn-danger btn-sm"
-                            onClick={() => handleDeleteTestCase(tc.id)}
-                          >
-                            🗑
-                          </button>
+                          {isTeacherOrAdmin && (
+                            <button
+                              id={`btn-del-tc-${tc.id}`}
+                              className="btn btn-danger btn-sm"
+                              onClick={() => handleDeleteTestCase(tc.id)}
+                            >
+                              🗑
+                            </button>
+                          )}
                         </div>
                         <div className="testcase-data">
                           <div className="testcase-field">
@@ -563,45 +976,49 @@ function App() {
                     ))
                   )}
 
-                  {/* Add Test Case Form */}
-                  <div className="divider" />
-                  <div className="section-title" style={{ marginBottom: 12 }}>➕ Thêm Test Case</div>
-                  <form onSubmit={handleCreateTestCase}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <div className="form-group">
-                        <label className="form-label">Input</label>
-                        <textarea
-                          id="tc-input"
-                          className="form-textarea"
-                          rows={2}
-                          value={tcInput}
-                          onChange={(e) => setTcInput(e.target.value)}
-                          placeholder="VD: 3 5"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Expected Output</label>
-                        <textarea
-                          id="tc-output"
-                          className="form-textarea"
-                          rows={2}
-                          value={tcOutput}
-                          onChange={(e) => setTcOutput(e.target.value)}
-                          placeholder="VD: 8"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: "var(--text-secondary)", cursor: "pointer" }}>
-                        <input type="checkbox" checked={tcSample} onChange={e => setTcSample(e.target.checked)} />
-                        Test mẫu (hiển thị cho sinh viên)
-                      </label>
-                    </div>
-                    <button id="btn-add-tc" type="submit" className="btn btn-ghost" style={{ width: "100%" }}>
-                      + Thêm Test Case
-                    </button>
-                  </form>
+                  {/* Add Test Case Form (Giảng viên) */}
+                  {isTeacherOrAdmin && (
+                    <>
+                      <div className="divider" />
+                      <div className="section-title" style={{ marginBottom: 12 }}>➕ Thêm Test Case (Giảng viên)</div>
+                      <form onSubmit={handleCreateTestCase}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          <div className="form-group">
+                            <label className="form-label">Input</label>
+                            <textarea
+                              id="tc-input"
+                              className="form-textarea"
+                              rows={2}
+                              value={tcInput}
+                              onChange={(e) => setTcInput(e.target.value)}
+                              placeholder="VD: 3 5"
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Expected Output</label>
+                            <textarea
+                              id="tc-output"
+                              className="form-textarea"
+                              rows={2}
+                              value={tcOutput}
+                              onChange={(e) => setTcOutput(e.target.value)}
+                              placeholder="VD: 8"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: "var(--text-secondary)", cursor: "pointer" }}>
+                            <input type="checkbox" checked={tcSample} onChange={(e) => setTcSample(e.target.checked)} />
+                            Test mẫu (hiển thị cho sinh viên)
+                          </label>
+                        </div>
+                        <button id="btn-add-tc" type="submit" className="btn btn-ghost" style={{ width: "100%" }}>
+                          + Thêm Test Case
+                        </button>
+                      </form>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -679,13 +1096,40 @@ function App() {
                       📜 Lịch sử nộp bài
                       <span className="count-badge">{submissions.length}</span>
                     </div>
-                    <button
-                      id="btn-refresh-subs"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => selectedProblem && fetchSubmissions(selectedProblem.id)}
-                    >
-                      🔄 Refresh
-                    </button>
+
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {user && (
+                        <div className="sub-filter-tabs">
+                          <button
+                            type="button"
+                            className={`sub-filter-tab ${subFilter === "all" ? "active" : ""}`}
+                            onClick={() => {
+                              setSubFilter("all");
+                              if (selectedProblem) fetchSubmissions(selectedProblem.id, "all");
+                            }}
+                          >
+                            Tất cả
+                          </button>
+                          <button
+                            type="button"
+                            className={`sub-filter-tab ${subFilter === "my" ? "active" : ""}`}
+                            onClick={() => {
+                              setSubFilter("my");
+                              if (selectedProblem) fetchSubmissions(selectedProblem.id, "my", user.id);
+                            }}
+                          >
+                            Của tôi
+                          </button>
+                        </div>
+                      )}
+                      <button
+                        id="btn-refresh-subs"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => selectedProblem && fetchSubmissions(selectedProblem.id, subFilter, user?.id)}
+                      >
+                        🔄
+                      </button>
+                    </div>
                   </div>
 
                   {submissions.length === 0 ? (
@@ -738,11 +1182,11 @@ function App() {
           </div>
         )}
 
-        {/* ========== VIEW: ADD PROBLEM ========== */}
+        {/* ========== VIEW: ADD PROBLEM (TEACHER ONLY) ========== */}
         {view === "add-problem" && (
           <div className="fade-in" style={{ maxWidth: 640, margin: "0 auto" }}>
             <div className="card">
-              <div className="card-title">➕ Thêm bài tập mới</div>
+              <div className="card-title">➕ Thêm bài tập mới (Giảng viên)</div>
 
               <form onSubmit={handleCreateProblem}>
                 <div className="form-group">
