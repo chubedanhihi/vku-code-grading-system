@@ -28,7 +28,10 @@ public class LeaderboardService {
     }
 
     public List<LeaderboardEntry> getLeaderboard() {
-        List<User> users = userRepository.findAll();
+        // Chỉ lấy sinh viên tham gia bảng xếp hạng (loại bỏ Giảng viên / Admin)
+        List<User> users = userRepository.findAll().stream()
+                .filter(u -> u.getRole() == null || "STUDENT".equalsIgnoreCase(u.getRole()))
+                .collect(Collectors.toList());
         List<Problem> problems = problemRepository.findAll();
         List<Submission> allSubmissions = submissionRepository.findAll();
 
@@ -98,11 +101,13 @@ public class LeaderboardService {
                     .build());
         }
 
-        // Sắp xếp: solvedCount DESC -> totalScore DESC -> accuracyRate DESC
-        entries.sort(Comparator.comparingLong(LeaderboardEntry::getSolvedCount).reversed()
-                .thenComparingInt(LeaderboardEntry::getTotalScore).reversed()
-                .thenComparingDouble(LeaderboardEntry::getAccuracyRate).reversed()
-                .thenComparing(LeaderboardEntry::getUsername));
+        // Sắp xếp chuẩn: solvedCount DESC -> totalScore DESC -> accuracyRate DESC -> username ASC
+        entries.sort(
+                Comparator.comparingLong(LeaderboardEntry::getSolvedCount).reversed()
+                        .thenComparing(Comparator.comparingInt(LeaderboardEntry::getTotalScore).reversed())
+                        .thenComparing(Comparator.comparingDouble(LeaderboardEntry::getAccuracyRate).reversed())
+                        .thenComparing(LeaderboardEntry::getUsername)
+        );
 
         // Gán rank 1, 2, 3...
         for (int i = 0; i < entries.size(); i++) {
