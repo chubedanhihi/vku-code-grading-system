@@ -1,7 +1,9 @@
 package vn.vku.judge.backend.service;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import vn.vku.judge.backend.security.JwtService;
 import vn.vku.judge.backend.dto.AuthResponse;
 import vn.vku.judge.backend.dto.LoginRequest;
 import vn.vku.judge.backend.dto.RegisterRequest;
@@ -16,8 +18,14 @@ public class AuthService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public AuthService(UserRepository userRepository) {
+    private final JwtService jwtService;
+    private final String teacherInviteCode;
+
+    public AuthService(UserRepository userRepository, JwtService jwtService,
+                       @Value("${app.teacher-invite-code:}") String teacherInviteCode) {
         this.userRepository = userRepository;
+        this.jwtService = jwtService;
+        this.teacherInviteCode = teacherInviteCode;
     }
 
     public AuthResponse register(RegisterRequest req) {
@@ -43,6 +51,12 @@ public class AuthService {
 
         String role = "STUDENT";
         if (req.getRole() != null && req.getRole().equalsIgnoreCase("TEACHER")) {
+            // Chặn tự nâng quyền: đăng ký giảng viên cần mã mời do nhà trường cấp
+            if (teacherInviteCode == null || teacherInviteCode.isBlank()
+                    || !teacherInviteCode.equals(req.getInviteCode())) {
+                return AuthResponse.builder().success(false)
+                        .message("Mã mời giảng viên không đúng. Tài khoản giảng viên cần mã do quản trị viên cấp.").build();
+            }
             role = "TEACHER";
         }
 
@@ -61,6 +75,7 @@ public class AuthService {
                 .username(saved.getUsername())
                 .email(saved.getEmail())
                 .role(saved.getRole())
+                .token(jwtService.issue(saved))
                 .build();
     }
 
@@ -109,6 +124,7 @@ public class AuthService {
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole())
+                .token(jwtService.issue(user))
                 .build();
     }
 

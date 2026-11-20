@@ -31,7 +31,8 @@ public class Submission {
 
     @Column(length = 50)
     private String status = "PENDING";
-    // ACCEPTED, WRONG_ANSWER, TIME_LIMIT_EXCEEDED, COMPILE_ERROR, RUNTIME_ERROR
+    // PENDING, RUNNING, ACCEPTED, WRONG_ANSWER, TIME_LIMIT_EXCEEDED, MEMORY_LIMIT_EXCEEDED,
+    // OUTPUT_LIMIT_EXCEEDED, COMPILE_ERROR, RUNTIME_ERROR, SYSTEM_ERROR
 
     @Column(name = "execution_time_ms")
     private Integer executionTime = 0;
@@ -42,6 +43,15 @@ public class Submission {
     // Lưu thông báo lỗi biên dịch nếu có
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
+
+    @Column(name = "passed_tests")
+    private Integer passedTests = 0;
+
+    @Column(name = "total_tests")
+    private Integer totalTests = 0;
+
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
 
     @Column(name = "submitted_at", insertable = false, updatable = false)
     private LocalDateTime submittedAt;
