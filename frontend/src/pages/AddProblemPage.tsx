@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Difficulty } from "../types";
+import type { CheckerMode, Difficulty } from "../types";
 
 interface AddProblemPageProps {
   onCreate: (payload: {
@@ -8,6 +8,10 @@ interface AddProblemPageProps {
     difficulty: Difficulty;
     timeLimit: number;
     memoryLimit: number;
+    checkerMode: CheckerMode;
+    tags: string;
+    studyPlan: string;
+    editorial: string;
   }) => Promise<boolean>;
   onCancel: () => void;
 }
@@ -18,6 +22,10 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
   const [timeLimit, setTimeLimit] = useState(1000);
   const [memoryLimit, setMemoryLimit] = useState(256);
+  const [checkerMode, setCheckerMode] = useState<CheckerMode>("EXACT");
+  const [tags, setTags] = useState("");
+  const [studyPlan, setStudyPlan] = useState("");
+  const [editorial, setEditorial] = useState("");
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,11 +38,18 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
       difficulty,
       timeLimit,
       memoryLimit,
+      checkerMode,
+      tags: tags.trim(),
+      studyPlan: studyPlan.trim(),
+      editorial: editorial.trim(),
     });
     setSaving(false);
     if (ok) {
       setTitle("");
       setDescription("");
+      setTags("");
+      setStudyPlan("");
+      setEditorial("");
     }
   };
 
@@ -80,7 +95,7 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
             />
           </div>
 
-          <div className="form-grid-3">
+          <div className="form-grid-4">
             <div className="form-group">
               <label className="form-label" htmlFor="inp-diff">
                 Độ khó
@@ -112,7 +127,7 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="inp-ml">
-                Memory Limit (MB)
+                Memory (MB)
               </label>
               <input
                 id="inp-ml"
@@ -124,6 +139,56 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
                 max={1024}
               />
             </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="inp-checker">
+                Chế độ so khớp
+              </label>
+              <select
+                id="inp-checker"
+                className="form-select"
+                value={checkerMode}
+                onChange={(e) => setCheckerMode(e.target.value as CheckerMode)}
+              >
+                <option value="EXACT">Chính xác (EXACT)</option>
+                <option value="FLOAT_1E6">Số thực (1e-6)</option>
+                <option value="FLOAT_1E4">Số thực (1e-4)</option>
+                <option value="TOKENS_IGNORE_CASE">Token (không phân biệt hoa/thường)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="tc-io-grid">
+            <div className="form-group">
+              <label className="form-label">Chủ đề (cách nhau bởi dấu phẩy)</label>
+              <input
+                type="text"
+                className="form-input"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="VD: Array, Math, DP"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Lộ trình học (Study Plan)</label>
+              <input
+                type="text"
+                className="form-input"
+                value={studyPlan}
+                onChange={(e) => setStudyPlan(e.target.value)}
+                placeholder="VD: Cơ bản năm nhất"
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Lời giải mẫu / Editorial (chỉ mở sau khi sinh viên AC)</label>
+            <textarea
+              className="form-textarea"
+              rows={4}
+              value={editorial}
+              onChange={(e) => setEditorial(e.target.value)}
+              placeholder="Hướng dẫn thuật toán, độ phức tạp và code tham khảo (Markdown)..."
+            />
           </div>
 
           <div className="form-actions-end">

@@ -1,5 +1,15 @@
 import type { JudgeStatus, UserProfile, View } from "../types";
-import { IconCode, IconList, IconLogout, IconPlus, IconTerminal, IconTrophy } from "./Icons";
+import {
+  IconCode,
+  IconFlag,
+  IconHome,
+  IconList,
+  IconLogout,
+  IconPlus,
+  IconSearch,
+  IconTerminal,
+  IconTrophy,
+} from "./Icons";
 
 interface NavbarProps {
   view: View;
@@ -8,6 +18,10 @@ interface NavbarProps {
   hasSelectedProblem: boolean;
   judgeStatus: JudgeStatus | null;
   onOpenLeaderboard: () => void;
+  onOpenClassrooms: () => void;
+  onOpenContests: () => void;
+  onOpenProfile: () => void;
+  onOpenPalette: () => void;
   onLogout: () => void;
 }
 
@@ -18,6 +32,10 @@ export function Navbar({
   hasSelectedProblem,
   judgeStatus,
   onOpenLeaderboard,
+  onOpenClassrooms,
+  onOpenContests,
+  onOpenProfile,
+  onOpenPalette,
   onLogout,
 }: NavbarProps) {
   const isTeacher = user?.role === "TEACHER" || user?.role === "ADMIN";
@@ -26,7 +44,7 @@ export function Navbar({
     <header className="app-header">
       <div className="header-inner">
         <div className="header-left">
-          <button type="button" className="brand" onClick={() => setView("problems")}>
+          <button type="button" className="brand" onClick={() => setView("home")}>
             <span className="brand-icon">
               <IconTerminal size={16} />
             </span>
@@ -37,6 +55,16 @@ export function Navbar({
 
           <nav className="nav-tabs" aria-label="Điều hướng chính">
             <button
+              id="nav-home"
+              type="button"
+              className={`nav-tab ${view === "home" ? "active" : ""}`}
+              onClick={() => setView("home")}
+            >
+              <IconHome size={15} />
+              <span>Trang chủ</span>
+            </button>
+
+            <button
               id="nav-problems"
               type="button"
               className={`nav-tab ${view === "problems" ? "active" : ""}`}
@@ -44,6 +72,28 @@ export function Navbar({
             >
               <IconList size={15} />
               <span>Bài tập</span>
+            </button>
+
+            {user && (
+              <button
+                id="nav-classrooms"
+                type="button"
+                className={`nav-tab ${view === "classrooms" ? "active" : ""}`}
+                onClick={onOpenClassrooms}
+              >
+                <IconCode size={15} />
+                <span>Lớp học</span>
+              </button>
+            )}
+
+            <button
+              id="nav-contests"
+              type="button"
+              className={`nav-tab ${view === "contests" ? "active" : ""}`}
+              onClick={onOpenContests}
+            >
+              <IconFlag size={15} />
+              <span>Kỳ thi</span>
             </button>
 
             <button
@@ -83,10 +133,21 @@ export function Navbar({
         </div>
 
         <div className="header-right">
+          <button
+            type="button"
+            className="cmd-trigger"
+            onClick={onOpenPalette}
+            title="Tìm nhanh (Ctrl + K)"
+          >
+            <IconSearch size={13} />
+            <span>Tìm nhanh</span>
+            <kbd className="kbd">Ctrl K</kbd>
+          </button>
+
           {judgeStatus && (
             <div
               className={`judge-pill ${judgeStatus.ready ? "ready" : "offline"}`}
-              title={`Sandbox: ${judgeStatus.sandbox} · Workers: ${judgeStatus.running}/${judgeStatus.workers} · Pending: ${judgeStatus.pending}`}
+              title={`Sandbox: ${judgeStatus.sandbox} · Broker: ${judgeStatus.broker || "db"} · Workers: ${judgeStatus.running}/${judgeStatus.workers}`}
             >
               <span className="judge-dot" />
               <span>{judgeStatus.ready ? judgeStatus.sandbox : "Offline"}</span>
@@ -98,11 +159,18 @@ export function Navbar({
 
           {user ? (
             <div className="user-chip">
-              <span className="user-avatar">{user.username.charAt(0).toUpperCase()}</span>
-              <span className="user-name">{user.username}</span>
-              <span className={`role-pill ${isTeacher ? "teacher" : "student"}`}>
-                {isTeacher ? "GV" : "SV"}
-              </span>
+              <button
+                type="button"
+                className="user-profile-trigger"
+                onClick={onOpenProfile}
+                title="Xem hồ sơ cá nhân"
+              >
+                <span className="user-avatar">{user.username.charAt(0).toUpperCase()}</span>
+                <span className="user-name">{user.username}</span>
+                <span className={`role-pill ${isTeacher ? "teacher" : "student"}`}>
+                  {isTeacher ? "GV" : "SV"}
+                </span>
+              </button>
               <button
                 id="btn-logout"
                 type="button"
