@@ -50,6 +50,15 @@ public class Submission {
     @Column(name = "total_tests")
     private Integer totalTests = 0;
 
+    @Column(name = "score")
+    private Integer score = 0;
+
+    @Column(name = "max_score")
+    private Integer maxScore = 0;
+
+    @Column(name = "contest_id")
+    private Long contestId;
+
     @Column(name = "started_at")
     private LocalDateTime startedAt;
 

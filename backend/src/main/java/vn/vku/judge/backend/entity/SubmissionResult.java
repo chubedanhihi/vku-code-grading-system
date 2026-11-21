@@ -38,4 +38,10 @@ public class SubmissionResult {
 
     @Column(columnDefinition = "TEXT")
     private String message;
+
+    @Column(name = "expected_output", columnDefinition = "TEXT")
+    private String expectedOutput;
+
+    @Column(name = "actual_output", columnDefinition = "TEXT")
+    private String actualOutput;
 }

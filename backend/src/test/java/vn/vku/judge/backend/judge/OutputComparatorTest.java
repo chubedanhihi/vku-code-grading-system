@@ -21,6 +21,19 @@ class OutputComparatorTest {
     }
 
     @Test
+    void floatToleranceCheckerWorks() {
+        assertTrue(OutputComparator.matches("3.1415926", "3.1415928", "FLOAT_1E6"));
+        assertFalse(OutputComparator.matches("3.1415926", "3.15", "FLOAT_1E6"));
+        assertTrue(OutputComparator.matches("10.0000", "10.00005", "FLOAT_1E4"));
+    }
+
+    @Test
+    void tokensIgnoreCaseWorks() {
+        assertTrue(OutputComparator.matches("YES\nNO", "yes   no", "TOKENS_IGNORE_CASE"));
+        assertFalse(OutputComparator.matches("YES", "NO", "TOKENS_IGNORE_CASE"));
+    }
+
+    @Test
     void verdictAggregationFollowsPriority() {
         assertEquals(Verdict.ACCEPTED, Verdict.aggregate(List.of("ACCEPTED", "ACCEPTED")));
         assertEquals(Verdict.WRONG_ANSWER, Verdict.aggregate(List.of("ACCEPTED", "WRONG_ANSWER")));

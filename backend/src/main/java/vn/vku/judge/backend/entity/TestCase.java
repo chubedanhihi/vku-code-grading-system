@@ -26,4 +26,10 @@ public class TestCase {
 
     @Column(name = "is_sample")
     private Boolean isSample = false;
+
+    @Column(name = "points")
+    private Integer points = 10;
+
+    @Column(name = "subtask")
+    private Integer subtask = 1;
 }

@@ -34,6 +34,9 @@ public class Problem {
     @Column(name = "memory_limit_mb")
     private Integer memoryLimit = 256;
 
+    @Column(name = "checker_mode", length = 30)
+    private String checkerMode = "EXACT"; // EXACT, FLOAT_1E6, FLOAT_1E4, TOKENS_IGNORE_CASE
+
     @Column(name = "created_by")
     private Long createdBy;
 
