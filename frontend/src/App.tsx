@@ -708,7 +708,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Toaster position="top-right" toastOptions={{ style: TOAST_STYLE }} />
+      <Toaster position="bottom-right" toastOptions={{ style: TOAST_STYLE }} />
 
       <Navbar
         view={view}
