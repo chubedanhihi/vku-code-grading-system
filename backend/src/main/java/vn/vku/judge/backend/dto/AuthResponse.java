@@ -16,4 +16,6 @@ public class AuthResponse {
     private String username;
     private String email;
     private String role;
+    /** JWT, gửi kèm header Authorization: Bearer <token> ở các request sau. */
+    private String token;
 }

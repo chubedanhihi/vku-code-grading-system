@@ -8,4 +8,6 @@ public class RegisterRequest {
     private String email;
     private String password;
     private String role; // STUDENT or TEACHER
+    /** Bắt buộc khi đăng ký TEACHER (app.teacher-invite-code). */
+    private String inviteCode;
 }

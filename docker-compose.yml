@@ -20,5 +20,83 @@ services:
       start_period: 30s
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
+  # Bật profile "fullstack" để chạy cả RabbitMQ + Backend + Worker + Frontend bằng 1 lệnh:
+  # docker compose --profile fullstack up -d --build
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: vku_judge_rabbitmq
+    profiles: ["fullstack"]
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    container_name: vku_judge_backend
+    profiles: ["fullstack"]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/vku_judge?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      JWT_SECRET: ${JWT_SECRET:-vku-online-judge-super-secret-jwt-key-2026}
+      TEACHER_INVITE_CODE: ${TEACHER_INVITE_CODE:-vku-teacher-2026}
+      JUDGE_SANDBOX: docker
+      JUDGE_BROKER: rabbitmq
+      JUDGE_ROLE: api
+      RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_LISTENER_SIMPLE_AUTO_STARTUP: "false"
+      JUDGE_WORK_DIR: /tmp/vku-judge-work
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/vku-judge-work:/tmp/vku-judge-work
+    ports:
+      - "8080:8080"
+
+  worker:
+    build:
+      context: ./backend
+    profiles: ["fullstack"]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/vku_judge?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword
+      JUDGE_SANDBOX: docker
+      JUDGE_BROKER: rabbitmq
+      JUDGE_ROLE: worker
+      JUDGE_WORKERS: 2
+      RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_LISTENER_SIMPLE_AUTO_STARTUP: "true"
+      JUDGE_WORK_DIR: /tmp/vku-judge-work
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/vku-judge-work:/tmp/vku-judge-work
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: vku_judge_frontend
+    profiles: ["fullstack"]
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
 volumes:
   db_data:

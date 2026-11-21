@@ -75,3 +75,21 @@ Script sẽ tự động khởi động:
    ```
 
 Truy cập hệ thống tại: **[http://localhost:5173/](http://localhost:5173/)**
+
+---
+
+## 🛡️ Judge Engine (Backend)
+
+| Thành phần | Mô tả |
+| :--- | :--- |
+| **Sandbox Docker** | Mỗi lần biên dịch/chạy là một container tạm: `--network none`, giới hạn RAM/CPU/pids, `--read-only`, `--cap-drop ALL`, chạy bằng user thường. Image: [`sandbox/Dockerfile`](sandbox/Dockerfile) (tự build khi backend khởi động lần đầu, hoặc `docker build -t vku-sandbox sandbox/`). |
+| **Đo tài nguyên** | CPU time (user+sys) và peak RSS qua GNU `time`; phát hiện OOM (`MEMORY_LIMIT_EXCEEDED`), giới hạn output (`OUTPUT_LIMIT_EXCEEDED`). |
+| **Chấm đủ test** | Chạy hết các test, trả `passedTests/totalTests` + kết quả từng test (`GET /api/submissions/{id}` → `results`). Test ẩn không lộ đáp án. |
+| **Hàng đợi bền vững** | PENDING → RUNNING → verdict, lưu trong DB; restart không mất job; nhận job nguyên tử; giới hạn 3 bài chờ/người. |
+| **Bảo mật API** | JWT (HS256), deny-by-default, phân quyền STUDENT/TEACHER/ADMIN, mã nguồn chỉ chủ bài nộp & giảng viên xem được. |
+
+**Cấu hình qua biến môi trường:** `JWT_SECRET` (≥ 32 ký tự, bắt buộc ở production), `TEACHER_INVITE_CODE` (mã mời đăng ký giảng viên, mặc định `vku-teacher-2026`), `JUDGE_SANDBOX` (`docker` | `local` — `local` chỉ dùng dev, **không cách ly**), `JUDGE_WORKERS`, `JUDGE_WORK_DIR` (phải nằm trong vùng Docker được mount, mặc định `~/.vku-judge/work`).
+
+> API yêu cầu header `Authorization: Bearer <token>` (token trả về từ `/api/auth/login`). Frontend phải gửi kèm token — xem PR Frontend.
+
+**Chạy test:** `cd backend && ./mvnw test -Dtest='OutputComparatorTest,JwtServiceTest,JudgeEngineLocalTest,DockerSandboxIT'`
