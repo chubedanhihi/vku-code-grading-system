@@ -1,7 +1,7 @@
 export type Role = "STUDENT" | "TEACHER" | "ADMIN";
 export type Difficulty = "EASY" | "MEDIUM" | "HARD";
 export type Lang = "C" | "CPP" | "JAVA" | "PYTHON";
-export type View = "problems" | "submit" | "add-problem" | "login" | "register" | "leaderboard";
+export type View = "home" | "problems" | "submit" | "add-problem" | "login" | "register" | "leaderboard";
 
 export interface UserProfile {
   id: number;

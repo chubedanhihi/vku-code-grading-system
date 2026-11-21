@@ -1,5 +1,5 @@
 import type { JudgeStatus, UserProfile, View } from "../types";
-import { IconCode, IconList, IconLogout, IconPlus, IconTerminal, IconTrophy } from "./Icons";
+import { IconCode, IconHome, IconList, IconLogout, IconPlus, IconTerminal, IconTrophy } from "./Icons";
 
 interface NavbarProps {
   view: View;
@@ -26,7 +26,7 @@ export function Navbar({
     <header className="app-header">
       <div className="header-inner">
         <div className="header-left">
-          <button type="button" className="brand" onClick={() => setView("problems")}>
+          <button type="button" className="brand" onClick={() => setView("home")}>
             <span className="brand-icon">
               <IconTerminal size={16} />
             </span>
@@ -36,6 +36,16 @@ export function Navbar({
           </button>
 
           <nav className="nav-tabs" aria-label="Điều hướng chính">
+            <button
+              id="nav-home"
+              type="button"
+              className={`nav-tab ${view === "home" ? "active" : ""}`}
+              onClick={() => setView("home")}
+            >
+              <IconHome size={15} />
+              <span>Trang chủ</span>
+            </button>
+
             <button
               id="nav-problems"
               type="button"

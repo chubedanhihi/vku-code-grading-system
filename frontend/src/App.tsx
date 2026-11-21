@@ -20,6 +20,7 @@ import { SubmissionDetailModal } from "./components/SubmissionDetailModal";
 import { getVerdictMeta, LANG_META } from "./constants/languages";
 import { AddProblemPage } from "./pages/AddProblemPage";
 import { AuthPage } from "./pages/AuthPage";
+import { HomePage } from "./pages/HomePage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { ProblemDetailPage } from "./pages/ProblemDetailPage";
 import { ProblemsPage } from "./pages/ProblemsPage";
@@ -44,7 +45,7 @@ const TOAST_STYLE = {
 };
 
 function App() {
-  const [view, setView] = useState<View>("problems");
+  const [view, setView] = useState<View>("home");
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(true);
   const [connError, setConnError] = useState<string | null>(null);
@@ -157,9 +158,10 @@ function App() {
   useEffect(() => {
     fetchProblems();
     fetchJudgeStatus();
+    fetchLeaderboard();
     const timer = setInterval(fetchJudgeStatus, 15000);
     return () => clearInterval(timer);
-  }, [fetchProblems, fetchJudgeStatus]);
+  }, [fetchProblems, fetchJudgeStatus, fetchLeaderboard]);
 
   useEffect(() => () => stopPolling(), [stopPolling]);
 
@@ -431,6 +433,22 @@ function App() {
       />
 
       <main className="app-main">
+        {view === "home" && (
+          <HomePage
+            user={user}
+            problems={problems}
+            leaderboard={leaderboard}
+            judgeStatus={judgeStatus}
+            onStartCoding={() => setView("problems")}
+            onSelectProblem={handleSelectProblem}
+            onOpenLeaderboard={() => {
+              setView("leaderboard");
+              fetchLeaderboard();
+            }}
+            onOpenLogin={() => setView("login")}
+          />
+        )}
+
         {view === "problems" && (
           <ProblemsPage
             problems={problems}
