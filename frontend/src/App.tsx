@@ -530,10 +530,10 @@ function App() {
     editorial: string;
   }) => {
     try {
-      await problemsApi.create(payload);
+      const created = await problemsApi.create(payload);
       await fetchProblems();
-      setView("problems");
-      toast.success("Đã tạo bài tập mới.");
+      handleSelectProblem(created);
+      toast.success("Đã tạo bài tập! Hãy thêm ít nhất 1 test case để sinh viên nộp bài.");
       return true;
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Lỗi khi tạo bài tập.");

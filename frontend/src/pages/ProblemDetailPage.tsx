@@ -551,7 +551,13 @@ export function ProblemDetailPage({
 
               {testCases.length === 0 ? (
                 <div className="empty-state compact">
-                  <p>Chưa có test case mẫu nào.</p>
+                  {isTeacher ? (
+                    <p style={{ color: "var(--accent-warning)" }}>
+                      ⚠️ Bài tập chưa có test case nào. Hãy thêm test bên dưới (hoặc Import .zip / Sinh tự động) để sinh viên có thể nộp bài.
+                    </p>
+                  ) : (
+                    <p>Chưa có test case mẫu nào.</p>
+                  )}
                 </div>
               ) : (
                 <div className="tc-list">
