@@ -33,8 +33,15 @@ public class AuthInterceptor implements HandlerInterceptor {
         if ("OPTIONS".equalsIgnoreCase(req.getMethod()) || !(handler instanceof HandlerMethod hm)) return true;
 
         String header = req.getHeader("Authorization");
+        String token = null;
         if (header != null && header.startsWith("Bearer ")) {
-            jwt.verify(header.substring(7).trim()).ifPresent(u -> req.setAttribute(ATTR, u));
+            token = header.substring(7).trim();
+        } else if (req.getParameter("token") != null && !req.getParameter("token").isBlank()) {
+            // EventSource (SSE) không hỗ trợ header Authorization tùy chỉnh
+            token = req.getParameter("token").trim();
+        }
+        if (token != null) {
+            jwt.verify(token).ifPresent(u -> req.setAttribute(ATTR, u));
         }
         AuthUser user = (AuthUser) req.getAttribute(ATTR);
 

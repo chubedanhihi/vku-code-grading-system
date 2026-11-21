@@ -9,7 +9,7 @@ import vn.vku.judge.backend.judge.RunTypes.TestOutcome;
 import vn.vku.judge.backend.repository.SubmissionRepository;
 import vn.vku.judge.backend.repository.SubmissionResultRepository;
 
-/** Ghi kết quả chấm vào DB trong một transaction (bean riêng để @Transactional có hiệu lực). */
+/** Ghi kết quả chấm vào DB trong một transaction. */
 @Component
 public class JudgeResultWriter {
     private final SubmissionRepository submissions;
@@ -27,6 +27,8 @@ public class JudgeResultWriter {
         s.setStatus(o.verdict());
         s.setPassedTests(o.passed());
         s.setTotalTests(o.total());
+        s.setScore(o.score());
+        s.setMaxScore(o.maxScore());
         s.setExecutionTime(o.maxTimeMs());
         s.setMemoryUsed(o.maxMemoryKb());
         s.setErrorMessage(o.errorMessage());
@@ -43,6 +45,8 @@ public class JudgeResultWriter {
             r.setMemoryKb(t.memoryKb());
             r.setSample(t.sample());
             r.setMessage(t.message());
+            r.setExpectedOutput(t.expectedOutput());
+            r.setActualOutput(t.actualOutput());
             results.save(r);
         }
     }

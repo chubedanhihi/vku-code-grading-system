@@ -7,6 +7,7 @@ RUN mvn clean package -DskipTests
 
 # Giai đoạn 2: Chạy ứng dụng Spring Boot
 FROM eclipse-temurin:17-jre-alpine
+RUN apk add --no-cache docker-cli
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080

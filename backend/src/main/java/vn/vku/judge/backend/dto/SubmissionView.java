@@ -16,12 +16,15 @@ public class SubmissionView {
     private Long userId;
     private String username;
     private Long problemId;
+    private Long contestId;
     private String language;
     private String status;
     private Integer executionTime;
     private Integer memoryUsed;
     private Integer passedTests;
     private Integer totalTests;
+    private Integer score;
+    private Integer maxScore;
     private String errorMessage;
     private LocalDateTime submittedAt;
     /** Chỉ có khi người xem là chủ bài nộp hoặc giảng viên. */

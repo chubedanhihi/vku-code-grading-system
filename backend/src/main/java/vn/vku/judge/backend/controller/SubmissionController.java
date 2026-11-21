@@ -3,17 +3,24 @@ package vn.vku.judge.backend.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import vn.vku.judge.backend.dto.RunCustomRequest;
+import vn.vku.judge.backend.dto.RunCustomResponse;
 import vn.vku.judge.backend.dto.SubmissionView;
 import vn.vku.judge.backend.dto.SubmitRequest;
 import vn.vku.judge.backend.entity.Submission;
 import vn.vku.judge.backend.exception.ApiException;
+import vn.vku.judge.backend.judge.SubmissionProgressBus;
+import vn.vku.judge.backend.judge.Verdict;
 import vn.vku.judge.backend.repository.SubmissionRepository;
 import vn.vku.judge.backend.security.AuthInterceptor;
 import vn.vku.judge.backend.security.AuthUser;
 import vn.vku.judge.backend.service.JudgeService;
 import vn.vku.judge.backend.service.SubmissionViewService;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -24,12 +31,14 @@ public class SubmissionController {
     private final SubmissionRepository submissionRepository;
     private final JudgeService judgeService;
     private final SubmissionViewService views;
+    private final SubmissionProgressBus progressBus;
 
     public SubmissionController(SubmissionRepository submissionRepository, JudgeService judgeService,
-                                SubmissionViewService views) {
+                                SubmissionViewService views, SubmissionProgressBus progressBus) {
         this.submissionRepository = submissionRepository;
         this.judgeService = judgeService;
         this.views = views;
+        this.progressBus = progressBus;
     }
 
     private static AuthUser me(HttpServletRequest req) {
@@ -40,7 +49,6 @@ public class SubmissionController {
         return PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), MAX_PAGE_SIZE));
     }
 
-    /** Lịch sử nộp bài gần đây (mã nguồn của người khác được ẩn). */
     @GetMapping
     public List<SubmissionView> getAll(@RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "100") int size, HttpServletRequest req) {
@@ -71,7 +79,6 @@ public class SubmissionController {
         return views.toViews(submissionRepository.findByUserIdOrderByIdDesc(userId, page(page, size)), u);
     }
 
-    /** Chi tiết 1 bài nộp kèm kết quả từng test (dùng cho polling). */
     @GetMapping("/{id}")
     public SubmissionView detail(@PathVariable Long id, HttpServletRequest req) {
         Submission s = submissionRepository.findById(id)
@@ -79,7 +86,31 @@ public class SubmissionController {
         return views.toDetail(s, me(req));
     }
 
-    /** Nộp code: user lấy từ JWT (không tin userId do client gửi). Trả PENDING ngay, client polling GET /{id}. */
+    /** Chạy thử với Custom Input trong sandbox, không lưu lịch sử. */
+    @PostMapping("/run")
+    public RunCustomResponse runCustom(@RequestBody RunCustomRequest req, HttpServletRequest httpReq) {
+        me(httpReq);
+        return judgeService.runCustom(req);
+    }
+
+    /** Stream tiến trình chấm bài theo thời gian thực qua SSE. */
+    @GetMapping(value = "/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream(@PathVariable Long id, HttpServletRequest req) {
+        AuthUser u = me(req);
+        Submission s = submissionRepository.findById(id)
+                .orElseThrow(() -> ApiException.notFound("Không tìm thấy bài nộp."));
+        SseEmitter emitter = progressBus.subscribe(id);
+        if (!Verdict.PENDING.equals(s.getStatus()) && !Verdict.RUNNING.equals(s.getStatus())) {
+            try {
+                emitter.send(SseEmitter.event().name("complete").data(views.toDetail(s, u)));
+                emitter.complete();
+            } catch (IOException ignored) {
+                emitter.completeWithError(ignored);
+            }
+        }
+        return emitter;
+    }
+
     @PostMapping
     public SubmissionView submit(@RequestBody SubmitRequest body, HttpServletRequest req) {
         AuthUser u = me(req);

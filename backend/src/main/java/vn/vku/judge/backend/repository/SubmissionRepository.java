@@ -19,6 +19,8 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     List<Submission> findAllByOrderByIdDesc();
     List<Submission> findByUserIdOrderByIdDesc(Long userId);
     List<Submission> findByProblemIdAndUserIdOrderByIdDesc(Long problemId, Long userId);
+    List<Submission> findByContestIdOrderByIdAsc(Long contestId);
+    List<Submission> findByProblemIdAndStatus(Long problemId, String status);
 
     // Bản có phân trang cho API (tránh trả về toàn bộ lịch sử)
     List<Submission> findAllByOrderByIdDesc(Pageable pageable);

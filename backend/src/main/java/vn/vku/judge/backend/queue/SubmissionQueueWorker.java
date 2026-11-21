@@ -3,6 +3,8 @@ package vn.vku.judge.backend.queue;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -18,38 +20,44 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Hàng đợi bền vững dựa trên bảng submissions (PENDING -> RUNNING -> verdict).
- * - Restart không mất job: job RUNNING bị treo được đưa về PENDING.
- * - Nhận job bằng UPDATE có điều kiện nên chạy nhiều worker/instance vẫn không chấm trùng.
- * - Số job chạy đồng thời bị chặn bởi judge.workers; sandbox chưa sẵn sàng thì job vẫn nằm trong hàng đợi.
+ * Hàng đợi bền vững dựa trên bảng submissions (mặc định khi judge.broker=db).
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "judge.broker", havingValue = "db", matchIfMissing = true)
 public class SubmissionQueueWorker {
     private final SubmissionRepository repo;
     private final JudgeService judgeService;
     private final JudgeProperties props;
     private final SandboxSelector selector;
+    private final String role;
     private final AtomicInteger active = new AtomicInteger();
     private ExecutorService executor;
 
     public SubmissionQueueWorker(SubmissionRepository repo, JudgeService judgeService,
-                                 JudgeProperties props, SandboxSelector selector) {
+                                 JudgeProperties props, SandboxSelector selector,
+                                 @Value("${judge.role:both}") String role) {
         this.repo = repo;
         this.judgeService = judgeService;
         this.props = props;
         this.selector = selector;
+        this.role = role;
+    }
+
+    private boolean workerEnabled() {
+        return !"api".equalsIgnoreCase(role);
     }
 
     @PostConstruct
     void start() {
+        if (!workerEnabled()) return;
         executor = Executors.newFixedThreadPool(Math.max(1, props.getWorkers()), r -> {
             Thread t = new Thread(r, "JudgeWorker");
             t.setDaemon(true);
             return t;
         });
         if (props.isRecoverOnStartup()) {
-            int n = repo.requeueStale(LocalDateTime.now().plusYears(1)); // tất cả RUNNING còn sót -> PENDING
+            int n = repo.requeueStale(LocalDateTime.now().plusYears(1));
             if (n > 0) log.info("Đã đưa {} bài đang chấm dở về hàng đợi sau khi khởi động.", n);
         }
     }
@@ -65,6 +73,7 @@ public class SubmissionQueueWorker {
 
     @Scheduled(fixedDelay = 1000, initialDelay = 2000)
     public synchronized void poll() {
+        if (!workerEnabled()) return;
         int free = props.getWorkers() - active.get();
         if (free <= 0 || !selector.current().isReady()) return;
         List<Long> ids = repo.findPendingIds(PageRequest.of(0, free));
@@ -82,9 +91,9 @@ public class SubmissionQueueWorker {
         }
     }
 
-    /** Job RUNNING quá hạn (worker chết giữa chừng) quay lại hàng đợi. */
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     public void requeueStale() {
+        if (!workerEnabled()) return;
         int n = repo.requeueStale(LocalDateTime.now().minusSeconds(props.getStaleRunningSeconds()));
         if (n > 0) log.warn("Đã đưa {} bài RUNNING quá hạn về hàng đợi.", n);
     }
