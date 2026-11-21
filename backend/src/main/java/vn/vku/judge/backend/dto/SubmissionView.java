@@ -17,6 +17,8 @@ public class SubmissionView {
     private String username;
     private Long problemId;
     private Long contestId;
+    private Long classroomId;
+    private Boolean isLate;
     private String language;
     private String status;
     private Integer executionTime;

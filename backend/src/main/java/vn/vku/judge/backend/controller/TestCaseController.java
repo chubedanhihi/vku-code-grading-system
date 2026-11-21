@@ -1,6 +1,7 @@
 package vn.vku.judge.backend.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.Data;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -8,6 +9,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import vn.vku.judge.backend.entity.TestCase;
 import vn.vku.judge.backend.exception.ApiException;
+import vn.vku.judge.backend.judge.JudgeEngine;
+import vn.vku.judge.backend.judge.Language;
+import vn.vku.judge.backend.judge.RunTypes.RunResult;
 import vn.vku.judge.backend.repository.ProblemRepository;
 import vn.vku.judge.backend.repository.TestCaseRepository;
 import vn.vku.judge.backend.security.AuthInterceptor;
@@ -29,10 +33,23 @@ public class TestCaseController {
 
     private final TestCaseRepository testCaseRepository;
     private final ProblemRepository problemRepository;
+    private final JudgeEngine judgeEngine;
 
-    public TestCaseController(TestCaseRepository testCaseRepository, ProblemRepository problemRepository) {
+    public TestCaseController(TestCaseRepository testCaseRepository, ProblemRepository problemRepository,
+                              JudgeEngine judgeEngine) {
         this.testCaseRepository = testCaseRepository;
         this.problemRepository = problemRepository;
+        this.judgeEngine = judgeEngine;
+    }
+
+    @Data
+    public static class GenerateTestsRequest {
+        private int count = 5;
+        private String generatorLang = "PYTHON";
+        private String generatorCode;
+        private String solutionLang = "PYTHON";
+        private String solutionCode;
+        private boolean markFirstAsSample = false;
     }
 
     @Public
@@ -152,6 +169,46 @@ public class TestCaseController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"problem-" + problemId + "-tests.zip\"")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(baos.toByteArray());
+    }
+
+    /** Sinh hàng loạt test case tự động bằng script sinh input + code lời giải chuẩn trong sandbox. */
+    @RequireRole({"TEACHER", "ADMIN"})
+    @PostMapping("/problem/{problemId}/generate")
+    public Map<String, Object> generateTests(@PathVariable Long problemId, @RequestBody GenerateTestsRequest body)
+            throws Exception {
+        if (!problemRepository.existsById(problemId)) throw ApiException.notFound("Không tìm thấy bài tập.");
+        int count = Math.min(Math.max(1, body.getCount()), 20);
+        Language genLang = Language.parse(body.getGeneratorLang())
+                .orElseThrow(() -> ApiException.badRequest("Ngôn ngữ generator không hợp lệ."));
+        Language solLang = Language.parse(body.getSolutionLang())
+                .orElseThrow(() -> ApiException.badRequest("Ngôn ngữ lời giải chuẩn không hợp lệ."));
+        if (body.getGeneratorCode() == null || body.getGeneratorCode().isBlank()
+                || body.getSolutionCode() == null || body.getSolutionCode().isBlank()) {
+            throw ApiException.badRequest("Cần nhập cả mã nguồn sinh input và lời giải chuẩn.");
+        }
+
+        int created = 0;
+        for (int i = 1; i <= count; i++) {
+            RunResult genRes = judgeEngine.runCustom(genLang, body.getGeneratorCode(), 3000, 256, String.valueOf(i));
+            if (genRes.exitCode() != 0) {
+                throw ApiException.badRequest("Lỗi script sinh input (seed=" + i + "): " + genRes.stderr());
+            }
+            String input = genRes.stdout();
+            RunResult solRes = judgeEngine.runCustom(solLang, body.getSolutionCode(), 3000, 256, input);
+            if (solRes.exitCode() != 0) {
+                throw ApiException.badRequest("Lỗi lời giải chuẩn (seed=" + i + "): " + solRes.stderr());
+            }
+            TestCase tc = new TestCase();
+            tc.setProblemId(problemId);
+            tc.setInput(input);
+            tc.setExpectedOutput(solRes.stdout());
+            tc.setIsSample(body.isMarkFirstAsSample() && i == 1);
+            tc.setPoints(10);
+            tc.setSubtask(1);
+            testCaseRepository.save(tc);
+            created++;
+        }
+        return Map.of("success", true, "generated", created);
     }
 
     @RequireRole({"TEACHER", "ADMIN"})

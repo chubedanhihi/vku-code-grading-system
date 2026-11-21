@@ -59,6 +59,12 @@ public class Submission {
     @Column(name = "contest_id")
     private Long contestId;
 
+    @Column(name = "classroom_id")
+    private Long classroomId;
+
+    @Column(name = "is_late")
+    private Boolean isLate = false;
+
     @Column(name = "started_at")
     private LocalDateTime startedAt;
 

@@ -37,6 +37,15 @@ public class Problem {
     @Column(name = "checker_mode", length = 30)
     private String checkerMode = "EXACT"; // EXACT, FLOAT_1E6, FLOAT_1E4, TOKENS_IGNORE_CASE
 
+    @Column(length = 255)
+    private String tags = ""; // VD: Array,DP,Math
+
+    @Column(name = "study_plan", length = 100)
+    private String studyPlan = ""; // VD: Cơ bản năm nhất
+
+    @Column(columnDefinition = "TEXT")
+    private String editorial;
+
     @Column(name = "created_by")
     private Long createdBy;
 

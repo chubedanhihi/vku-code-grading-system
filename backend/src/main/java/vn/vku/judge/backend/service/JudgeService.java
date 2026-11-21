@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import vn.vku.judge.backend.dto.RunCustomRequest;
 import vn.vku.judge.backend.dto.RunCustomResponse;
 import vn.vku.judge.backend.dto.SubmitRequest;
+import vn.vku.judge.backend.entity.ClassroomAssignment;
 import vn.vku.judge.backend.entity.Contest;
 import vn.vku.judge.backend.entity.Problem;
 import vn.vku.judge.backend.entity.Submission;
@@ -22,6 +23,7 @@ import vn.vku.judge.backend.judge.RunTypes.TestData;
 import vn.vku.judge.backend.judge.SubmissionProgressBus;
 import vn.vku.judge.backend.judge.Verdict;
 import vn.vku.judge.backend.queue.RabbitJudgeConfig.RabbitJudgeBroker;
+import vn.vku.judge.backend.repository.ClassroomAssignmentRepository;
 import vn.vku.judge.backend.repository.ContestRepository;
 import vn.vku.judge.backend.repository.ProblemRepository;
 import vn.vku.judge.backend.repository.SubmissionRepository;
@@ -44,6 +46,7 @@ public class JudgeService {
     private final ProblemRepository problemRepository;
     private final TestCaseRepository testCaseRepository;
     private final ContestRepository contestRepository;
+    private final ClassroomAssignmentRepository assignmentRepository;
     private final JudgeEngine engine;
     private final JudgeResultWriter writer;
     private final JudgeProperties props;
@@ -53,6 +56,7 @@ public class JudgeService {
 
     public JudgeService(SubmissionRepository submissionRepository, ProblemRepository problemRepository,
                         TestCaseRepository testCaseRepository, ContestRepository contestRepository,
+                        ClassroomAssignmentRepository assignmentRepository,
                         JudgeEngine engine, JudgeResultWriter writer, JudgeProperties props,
                         SubmissionProgressBus progressBus, SubmissionViewService viewService,
                         @Autowired(required = false) RabbitJudgeBroker rabbitBroker) {
@@ -60,6 +64,7 @@ public class JudgeService {
         this.problemRepository = problemRepository;
         this.testCaseRepository = testCaseRepository;
         this.contestRepository = contestRepository;
+        this.assignmentRepository = assignmentRepository;
         this.engine = engine;
         this.writer = writer;
         this.props = props;
@@ -140,6 +145,18 @@ public class JudgeService {
                 throw ApiException.badRequest("Kỳ thi đã kết thúc, không thể nộp bài.");
             }
         }
+        boolean isLate = false;
+        if (req.getClassroomId() != null) {
+            ClassroomAssignment assign = assignmentRepository
+                    .findByClassroomIdAndProblemId(req.getClassroomId(), req.getProblemId())
+                    .orElseThrow(() -> ApiException.notFound("Bài tập không thuộc lớp học này."));
+            if (assign.getDueAt() != null && LocalDateTime.now().isAfter(assign.getDueAt())) {
+                if (!Boolean.TRUE.equals(assign.getAllowLate())) {
+                    throw ApiException.badRequest("Đã quá hạn nộp bài cho lớp học này.");
+                }
+                isLate = true;
+            }
+        }
         long mine = submissionRepository.countByUserIdAndStatusIn(user.id(), Set.of(Verdict.PENDING, Verdict.RUNNING));
         if (mine >= props.getMaxPendingPerUser()) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS,
@@ -153,6 +170,8 @@ public class JudgeService {
         s.setUserId(user.id());
         s.setProblemId(req.getProblemId());
         s.setContestId(req.getContestId());
+        s.setClassroomId(req.getClassroomId());
+        s.setIsLate(isLate);
         s.setLanguage(lang.name());
         s.setSourceCode(req.getSourceCode());
         s.setStatus(Verdict.PENDING);
