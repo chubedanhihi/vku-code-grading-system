@@ -1,7 +1,17 @@
 export type Role = "STUDENT" | "TEACHER" | "ADMIN";
 export type Difficulty = "EASY" | "MEDIUM" | "HARD";
+export type CheckerMode = "EXACT" | "FLOAT_1E6" | "FLOAT_1E4" | "TOKENS_IGNORE_CASE";
 export type Lang = "C" | "CPP" | "JAVA" | "PYTHON";
-export type View = "home" | "problems" | "submit" | "add-problem" | "login" | "register" | "leaderboard";
+export type View =
+  | "home"
+  | "problems"
+  | "submit"
+  | "add-problem"
+  | "contests"
+  | "profile"
+  | "login"
+  | "register"
+  | "leaderboard";
 
 export interface UserProfile {
   id: number;
@@ -18,8 +28,13 @@ export interface Problem {
   difficulty: Difficulty;
   timeLimit: number;
   memoryLimit: number;
+  checkerMode?: CheckerMode;
   createdBy?: number;
   createdAt: string;
+  totalSubmissions?: number;
+  acceptedSubmissions?: number;
+  acRate?: number;
+  myStatus?: "SOLVED" | "ATTEMPTED" | "NONE";
 }
 
 export interface TestCase {
@@ -28,6 +43,8 @@ export interface TestCase {
   input: string;
   expectedOutput: string;
   isSample: boolean;
+  points?: number;
+  subtask?: number;
 }
 
 export interface SubmissionResult {
@@ -37,6 +54,8 @@ export interface SubmissionResult {
   memoryKb: number;
   sample: boolean;
   message?: string | null;
+  expectedOutput?: string | null;
+  actualOutput?: string | null;
 }
 
 export interface Submission {
@@ -44,6 +63,7 @@ export interface Submission {
   userId: number;
   username?: string;
   problemId: number;
+  contestId?: number | null;
   language: string;
   sourceCode?: string;
   status: string;
@@ -51,9 +71,77 @@ export interface Submission {
   memoryUsed: number;
   passedTests?: number;
   totalTests?: number;
+  score?: number;
+  maxScore?: number;
   errorMessage?: string;
   submittedAt: string;
   results?: SubmissionResult[];
+}
+
+export interface RunCustomResponse {
+  verdict: string;
+  timeMs: number;
+  memoryKb: number;
+  stdout?: string;
+  stderr?: string;
+  compileError?: string;
+}
+
+export interface PlagiarismMatch {
+  userAId: number;
+  userAName: string;
+  submissionAId: number;
+  userBId: number;
+  userBName: string;
+  submissionBId: number;
+  language: string;
+  similarityPercent: number;
+}
+
+export interface ContestProblemView {
+  problemId: number;
+  title: string;
+  difficulty: Difficulty;
+  timeLimit: number;
+  memoryLimit: number;
+  orderIndex: number;
+  points: number;
+}
+
+export interface ContestView {
+  id: number;
+  title: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  status: "UPCOMING" | "RUNNING" | "ENDED";
+  participantCount: number;
+  problemCount: number;
+  registered: boolean;
+  problems?: ContestProblemView[];
+}
+
+export interface ContestStandingRow {
+  rank: number;
+  userId: number;
+  username: string;
+  solved: number;
+  penaltyMinutes: number;
+  cells: Record<number, { solved: boolean; wrongAttempts: number; solvedMinutes: number }>;
+}
+
+export interface ProfileStatsView {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  totalSubmissions: number;
+  acceptedSubmissions: number;
+  solvedCount: number;
+  accuracyRate: number;
+  languageBreakdown: Record<string, number>;
+  dailyHeatmap: Record<string, number>;
+  solvedProblems: Array<{ id: number; title: string; difficulty: Difficulty }>;
 }
 
 export interface LeaderboardEntry {
@@ -83,6 +171,7 @@ export interface AiAnalyzeResponse {
 
 export interface JudgeStatus {
   sandbox: string;
+  broker?: string;
   ready: boolean;
   workers: number;
   running: number;

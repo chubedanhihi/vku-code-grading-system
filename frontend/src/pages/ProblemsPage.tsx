@@ -1,13 +1,13 @@
 import { useState } from "react";
-import type { Difficulty, Problem } from "../types";
-import { IconArrowRight, IconClock, IconCpu, IconSearch, IconTrash } from "../components/Icons";
+import type { Difficulty, Problem, UserProfile } from "../types";
+import { IconArrowRight, IconCheck, IconClock, IconCpu, IconSearch, IconTrash } from "../components/Icons";
 
 interface ProblemsPageProps {
   problems: Problem[];
   loading: boolean;
   connError: string | null;
   selectedProblemId?: number;
-  isTeacher: boolean;
+  user: UserProfile | null;
   onSelect: (p: Problem) => void;
   onDelete: (id: number) => void;
 }
@@ -17,12 +17,16 @@ export function ProblemsPage({
   loading,
   connError,
   selectedProblemId,
-  isTeacher,
+  user,
   onSelect,
   onDelete,
 }: ProblemsPageProps) {
   const [query, setQuery] = useState("");
   const [diffFilter, setDiffFilter] = useState<"ALL" | Difficulty>("ALL");
+
+  const isTeacher = user?.role === "TEACHER" || user?.role === "ADMIN";
+  const solvedCount = problems.filter((p) => p.myStatus === "SOLVED").length;
+  const pct = problems.length > 0 ? Math.round((solvedCount * 100) / problems.length) : 0;
 
   const filtered = problems.filter((p) => {
     const matchDiff = diffFilter === "ALL" || p.difficulty === diffFilter;
@@ -37,7 +41,7 @@ export function ProblemsPage({
         <div>
           <h1 className="page-title">Danh sách bài tập</h1>
           <p className="page-subtitle">
-            Chọn một bài tập để xem đề bài, viết code và chấm tự động trong sandbox.
+            Chọn một bài tập để xem đề bài, chạy thử và chấm tự động trong sandbox.
           </p>
         </div>
         <div className="page-controls">
@@ -66,6 +70,20 @@ export function ProblemsPage({
         </div>
       </div>
 
+      {user && problems.length > 0 && (
+        <div className="surface-card progress-banner">
+          <div className="progress-banner-head">
+            <span>Tiến độ hoàn thành</span>
+            <span className="mono">
+              Đã giải {solvedCount} / {problems.length} bài ({pct}%)
+            </span>
+          </div>
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
+
       <div className="surface-card">
         {loading ? (
           <div className="loading-state">
@@ -88,6 +106,24 @@ export function ProblemsPage({
                 onClick={() => onSelect(prob)}
               >
                 <div className="problem-item-main">
+                  <span
+                    className={`status-dot ${
+                      prob.myStatus === "SOLVED"
+                        ? "is-solved"
+                        : prob.myStatus === "ATTEMPTED"
+                          ? "is-attempted"
+                          : ""
+                    }`}
+                    title={
+                      prob.myStatus === "SOLVED"
+                        ? "Đã giải (AC)"
+                        : prob.myStatus === "ATTEMPTED"
+                          ? "Đã thử (chưa AC)"
+                          : "Chưa làm"
+                    }
+                  >
+                    {prob.myStatus === "SOLVED" ? <IconCheck size={12} /> : prob.myStatus === "ATTEMPTED" ? "○" : ""}
+                  </span>
                   <span className="problem-id mono">#{prob.id}</span>
                   <span className="problem-title">{prob.title}</span>
                   <span className={`diff-badge diff-${prob.difficulty.toLowerCase()}`}>
@@ -96,6 +132,11 @@ export function ProblemsPage({
                 </div>
 
                 <div className="problem-item-meta">
+                  {typeof prob.acRate === "number" && (prob.totalSubmissions ?? 0) > 0 && (
+                    <span className="tag-pill" title={`${prob.acceptedSubmissions}/${prob.totalSubmissions} lượt AC`}>
+                      AC {prob.acRate}%
+                    </span>
+                  )}
                   <span className="limit-chip" title="Giới hạn thời gian">
                     <IconClock size={13} />
                     {prob.timeLimit} ms

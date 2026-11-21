@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Difficulty } from "../types";
+import type { CheckerMode, Difficulty } from "../types";
 
 interface AddProblemPageProps {
   onCreate: (payload: {
@@ -8,6 +8,7 @@ interface AddProblemPageProps {
     difficulty: Difficulty;
     timeLimit: number;
     memoryLimit: number;
+    checkerMode: CheckerMode;
   }) => Promise<boolean>;
   onCancel: () => void;
 }
@@ -18,6 +19,7 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
   const [timeLimit, setTimeLimit] = useState(1000);
   const [memoryLimit, setMemoryLimit] = useState(256);
+  const [checkerMode, setCheckerMode] = useState<CheckerMode>("EXACT");
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,6 +32,7 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
       difficulty,
       timeLimit,
       memoryLimit,
+      checkerMode,
     });
     setSaving(false);
     if (ok) {
@@ -80,7 +83,7 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
             />
           </div>
 
-          <div className="form-grid-3">
+          <div className="form-grid-4">
             <div className="form-group">
               <label className="form-label" htmlFor="inp-diff">
                 Độ khó
@@ -112,7 +115,7 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="inp-ml">
-                Memory Limit (MB)
+                Memory (MB)
               </label>
               <input
                 id="inp-ml"
@@ -123,6 +126,22 @@ export function AddProblemPage({ onCreate, onCancel }: AddProblemPageProps) {
                 min={16}
                 max={1024}
               />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="inp-checker">
+                Chế độ so khớp
+              </label>
+              <select
+                id="inp-checker"
+                className="form-select"
+                value={checkerMode}
+                onChange={(e) => setCheckerMode(e.target.value as CheckerMode)}
+              >
+                <option value="EXACT">Chính xác (EXACT)</option>
+                <option value="FLOAT_1E6">Số thực (1e-6)</option>
+                <option value="FLOAT_1E4">Số thực (1e-4)</option>
+                <option value="TOKENS_IGNORE_CASE">Token (không phân biệt hoa/thường)</option>
+              </select>
             </div>
           </div>
 

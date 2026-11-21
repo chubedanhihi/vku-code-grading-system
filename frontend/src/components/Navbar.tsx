@@ -1,5 +1,15 @@
 import type { JudgeStatus, UserProfile, View } from "../types";
-import { IconCode, IconHome, IconList, IconLogout, IconPlus, IconTerminal, IconTrophy } from "./Icons";
+import {
+  IconCode,
+  IconFlag,
+  IconHome,
+  IconList,
+  IconLogout,
+  IconPlus,
+  IconSearch,
+  IconTerminal,
+  IconTrophy,
+} from "./Icons";
 
 interface NavbarProps {
   view: View;
@@ -8,6 +18,9 @@ interface NavbarProps {
   hasSelectedProblem: boolean;
   judgeStatus: JudgeStatus | null;
   onOpenLeaderboard: () => void;
+  onOpenContests: () => void;
+  onOpenProfile: () => void;
+  onOpenPalette: () => void;
   onLogout: () => void;
 }
 
@@ -18,6 +31,9 @@ export function Navbar({
   hasSelectedProblem,
   judgeStatus,
   onOpenLeaderboard,
+  onOpenContests,
+  onOpenProfile,
+  onOpenPalette,
   onLogout,
 }: NavbarProps) {
   const isTeacher = user?.role === "TEACHER" || user?.role === "ADMIN";
@@ -57,6 +73,16 @@ export function Navbar({
             </button>
 
             <button
+              id="nav-contests"
+              type="button"
+              className={`nav-tab ${view === "contests" ? "active" : ""}`}
+              onClick={onOpenContests}
+            >
+              <IconFlag size={15} />
+              <span>Kỳ thi</span>
+            </button>
+
+            <button
               id="nav-leaderboard"
               type="button"
               className={`nav-tab ${view === "leaderboard" ? "active" : ""}`}
@@ -93,10 +119,21 @@ export function Navbar({
         </div>
 
         <div className="header-right">
+          <button
+            type="button"
+            className="cmd-trigger"
+            onClick={onOpenPalette}
+            title="Tìm nhanh (Ctrl + K)"
+          >
+            <IconSearch size={13} />
+            <span>Tìm nhanh</span>
+            <kbd className="kbd">Ctrl K</kbd>
+          </button>
+
           {judgeStatus && (
             <div
               className={`judge-pill ${judgeStatus.ready ? "ready" : "offline"}`}
-              title={`Sandbox: ${judgeStatus.sandbox} · Workers: ${judgeStatus.running}/${judgeStatus.workers} · Pending: ${judgeStatus.pending}`}
+              title={`Sandbox: ${judgeStatus.sandbox} · Broker: ${judgeStatus.broker || "db"} · Workers: ${judgeStatus.running}/${judgeStatus.workers}`}
             >
               <span className="judge-dot" />
               <span>{judgeStatus.ready ? judgeStatus.sandbox : "Offline"}</span>
@@ -108,11 +145,18 @@ export function Navbar({
 
           {user ? (
             <div className="user-chip">
-              <span className="user-avatar">{user.username.charAt(0).toUpperCase()}</span>
-              <span className="user-name">{user.username}</span>
-              <span className={`role-pill ${isTeacher ? "teacher" : "student"}`}>
-                {isTeacher ? "GV" : "SV"}
-              </span>
+              <button
+                type="button"
+                className="user-profile-trigger"
+                onClick={onOpenProfile}
+                title="Xem hồ sơ cá nhân"
+              >
+                <span className="user-avatar">{user.username.charAt(0).toUpperCase()}</span>
+                <span className="user-name">{user.username}</span>
+                <span className={`role-pill ${isTeacher ? "teacher" : "student"}`}>
+                  {isTeacher ? "GV" : "SV"}
+                </span>
+              </button>
               <button
                 id="btn-logout"
                 type="button"

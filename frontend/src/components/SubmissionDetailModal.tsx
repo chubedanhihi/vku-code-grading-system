@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Submission } from "../types";
+import type { Submission, SubmissionResult } from "../types";
 import { getVerdictMeta } from "../constants/languages";
 import { IconCheck, IconCopy, IconSparkles, IconX } from "./Icons";
 import { VerdictBadge } from "./VerdictBadge";
@@ -9,6 +9,54 @@ interface SubmissionDetailModalProps {
   loading: boolean;
   onClose: () => void;
   onAskAi: (sub: Submission) => void;
+}
+
+function OutputDiffViewer({ result }: { result: SubmissionResult }) {
+  const expLines = (result.expectedOutput ?? "").split("\n");
+  const actLines = (result.actualOutput ?? "").split("\n");
+  const count = Math.max(expLines.length, actLines.length);
+
+  return (
+    <div className="diff-viewer">
+      <div className="diff-header">
+        <span>Test #{result.testIndex} — So sánh Expected vs Actual</span>
+      </div>
+      <div className="diff-columns">
+        <div className="diff-col">
+          <div className="diff-col-title">Expected Output</div>
+          <div className="diff-lines mono">
+            {Array.from({ length: count }).map((_, idx) => {
+              const e = expLines[idx] ?? "";
+              const a = actLines[idx] ?? "";
+              const diff = e !== a;
+              return (
+                <div key={idx} className={`diff-line ${diff ? "is-expected" : ""}`}>
+                  <span className="diff-ln">{idx + 1}</span>
+                  <span>{e || " "}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="diff-col">
+          <div className="diff-col-title">Actual Output</div>
+          <div className="diff-lines mono">
+            {Array.from({ length: count }).map((_, idx) => {
+              const e = expLines[idx] ?? "";
+              const a = actLines[idx] ?? "";
+              const diff = e !== a;
+              return (
+                <div key={idx} className={`diff-line ${diff ? "is-actual" : ""}`}>
+                  <span className="diff-ln">{idx + 1}</span>
+                  <span>{a || " "}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function SubmissionDetailModal({
@@ -31,6 +79,11 @@ export function SubmissionDetailModal({
       /* ignore */
     }
   };
+
+  const diffCandidates =
+    submission?.results?.filter(
+      (r) => r.verdict === "WRONG_ANSWER" && r.expectedOutput != null && r.actualOutput != null
+    ) ?? [];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -86,7 +139,6 @@ export function SubmissionDetailModal({
             </div>
           ) : (
             <div className="detail-stack">
-              {/* Summary Strip */}
               <div className="detail-summary">
                 <div className="detail-stat">
                   <span className="detail-stat-label">Kết quả</span>
@@ -97,7 +149,17 @@ export function SubmissionDetailModal({
                   />
                 </div>
                 <div className="detail-stat">
-                  <span className="detail-stat-label">Thời gian CPU</span>
+                  <span className="detail-stat-label">Điểm số</span>
+                  <span className="detail-stat-value">
+                    {submission.maxScore
+                      ? `${submission.score ?? 0} / ${submission.maxScore}`
+                      : submission.totalTests
+                        ? `${submission.passedTests ?? 0} / ${submission.totalTests}`
+                        : "—"}
+                  </span>
+                </div>
+                <div className="detail-stat">
+                  <span className="detail-stat-label">CPU Time</span>
                   <span className="detail-stat-value">
                     {submission.executionTime != null ? `${submission.executionTime} ms` : "—"}
                   </span>
@@ -108,17 +170,8 @@ export function SubmissionDetailModal({
                     {submission.memoryUsed ? `${submission.memoryUsed} KB` : "—"}
                   </span>
                 </div>
-                <div className="detail-stat">
-                  <span className="detail-stat-label">Test cases</span>
-                  <span className="detail-stat-value">
-                    {submission.totalTests
-                      ? `${submission.passedTests ?? 0} / ${submission.totalTests}`
-                      : "—"}
-                  </span>
-                </div>
               </div>
 
-              {/* Error / Compile log */}
               {submission.errorMessage && (
                 <div className="detail-section">
                   <div className="detail-section-title">Thông báo lỗi</div>
@@ -126,7 +179,14 @@ export function SubmissionDetailModal({
                 </div>
               )}
 
-              {/* Per-Test Results */}
+              {diffCandidates.length > 0 && (
+                <div className="detail-section">
+                  {diffCandidates.map((r) => (
+                    <OutputDiffViewer key={r.testIndex} result={r} />
+                  ))}
+                </div>
+              )}
+
               {submission.results && submission.results.length > 0 && (
                 <div className="detail-section">
                   <div className="detail-section-title">Kết quả từng test case</div>
@@ -172,7 +232,6 @@ export function SubmissionDetailModal({
                 </div>
               )}
 
-              {/* Source Code */}
               <div className="detail-section">
                 <div className="detail-section-header">
                   <span className="detail-section-title">Mã nguồn</span>

@@ -1,10 +1,16 @@
 import type {
   AiAnalyzeResponse,
+  CheckerMode,
+  ContestStandingRow,
+  ContestView,
   Difficulty,
   JudgeStatus,
   LeaderboardEntry,
+  PlagiarismMatch,
   Problem,
+  ProfileStatsView,
   Role,
+  RunCustomResponse,
   Submission,
   TestCase,
   UserProfile,
@@ -31,7 +37,6 @@ export function loadStoredUser(): UserProfile | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<UserProfile>;
-    // Yêu cầu phải có JWT token hợp lệ (bỏ session cũ không có token)
     if (!parsed || !parsed.token || !parsed.id || !parsed.username) {
       localStorage.removeItem(STORAGE_KEY);
       return null;
@@ -54,7 +59,8 @@ export function saveStoredUser(user: UserProfile | null) {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const user = loadStoredUser();
   const headers = new Headers(init.headers);
-  if (!headers.has("Content-Type") && init.body) {
+  const isForm = init.body instanceof FormData;
+  if (!headers.has("Content-Type") && init.body && !isForm) {
     headers.set("Content-Type", "application/json");
   }
   if (user?.token) {
@@ -130,30 +136,82 @@ export const problemsApi = {
     difficulty: Difficulty;
     timeLimit: number;
     memoryLimit: number;
+    checkerMode?: CheckerMode;
   }) =>
     request<Problem>("/problems", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  remove: (id: number) =>
-    request<void>(`/problems/${id}`, { method: "DELETE" }),
+  update: (
+    id: number,
+    payload: {
+      title: string;
+      description: string;
+      difficulty: Difficulty;
+      timeLimit: number;
+      memoryLimit: number;
+      checkerMode: CheckerMode;
+    }
+  ) =>
+    request<Problem>(`/problems/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  remove: (id: number) => request<void>(`/problems/${id}`, { method: "DELETE" }),
+  plagiarism: (id: number) => request<PlagiarismMatch[]>(`/problems/${id}/plagiarism`),
 };
 
 export const testCasesApi = {
-  byProblem: (problemId: number) =>
-    request<TestCase[]>(`/testcases/problem/${problemId}`),
+  byProblem: (problemId: number) => request<TestCase[]>(`/testcases/problem/${problemId}`),
   create: (payload: {
     problemId: number;
     input: string;
     expectedOutput: string;
     isSample: boolean;
+    points?: number;
+    subtask?: number;
   }) =>
     request<TestCase>("/testcases", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  remove: (id: number) =>
-    request<void>(`/testcases/${id}`, { method: "DELETE" }),
+  update: (
+    id: number,
+    payload: {
+      input: string;
+      expectedOutput: string;
+      isSample: boolean;
+      points?: number;
+      subtask?: number;
+    }
+  ) =>
+    request<TestCase>(`/testcases/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  remove: (id: number) => request<void>(`/testcases/${id}`, { method: "DELETE" }),
+  importZip: (problemId: number, file: File, markFirstAsSample = true) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ success: boolean; imported: number }>(
+      `/testcases/problem/${problemId}/import-zip?markFirstAsSample=${markFirstAsSample}`,
+      { method: "POST", body: fd }
+    );
+  },
+  exportZip: async (problemId: number) => {
+    const user = loadStoredUser();
+    const res = await fetch(`${API_BASE}/testcases/problem/${problemId}/export-zip`, {
+      headers: user?.token ? { Authorization: `Bearer ${user.token}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, "Không thể tải file zip test case.");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `problem-${problemId}-tests.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export const submissionsApi = {
@@ -161,12 +219,57 @@ export const submissionsApi = {
     request<Submission[]>(`/submissions/problem/${problemId}?size=${size}`),
   byProblemAndUser: (problemId: number, userId: number, size = 50) =>
     request<Submission[]>(`/submissions/problem/${problemId}/user/${userId}?size=${size}`),
+  byUser: (userId: number, size = 50) =>
+    request<Submission[]>(`/submissions/user/${userId}?size=${size}`),
   detail: (id: number) => request<Submission>(`/submissions/${id}`),
-  submit: (payload: { problemId: number; language: string; sourceCode: string }) =>
+  submit: (payload: {
+    problemId: number;
+    contestId?: number | null;
+    language: string;
+    sourceCode: string;
+  }) =>
     request<Submission>("/submissions", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  runCustom: (payload: {
+    problemId?: number;
+    language: string;
+    sourceCode: string;
+    input: string;
+  }) =>
+    request<RunCustomResponse>("/submissions/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  streamUrl: (id: number) => {
+    const token = loadStoredUser()?.token || "";
+    return `${API_BASE}/submissions/${id}/stream?token=${encodeURIComponent(token)}`;
+  },
+};
+
+export const contestsApi = {
+  list: () => request<ContestView[]>("/contests"),
+  detail: (id: number) => request<ContestView>(`/contests/${id}`),
+  create: (payload: {
+    title: string;
+    description: string;
+    startTime: string;
+    endTime: string;
+    problemIds: number[];
+  }) =>
+    request<ContestView>("/contests", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  remove: (id: number) => request<void>(`/contests/${id}`, { method: "DELETE" }),
+  register: (id: number) =>
+    request<{ success: boolean; message: string }>(`/contests/${id}/register`, { method: "POST" }),
+  standings: (id: number) => request<ContestStandingRow[]>(`/contests/${id}/standings`),
+};
+
+export const profileApi = {
+  myProfile: () => request<ProfileStatsView>("/users/me/profile"),
 };
 
 export const leaderboardApi = {
