@@ -16,6 +16,9 @@ public class ProblemSummaryView {
     private Integer timeLimit;
     private Integer memoryLimit;
     private String checkerMode;
+    private String tags;
+    private String studyPlan;
+    private boolean hasEditorial;
     private Long createdBy;
     private LocalDateTime createdAt;
     private long totalSubmissions;

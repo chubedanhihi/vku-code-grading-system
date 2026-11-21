@@ -55,6 +55,8 @@ public class SubmissionViewService {
         return SubmissionView.builder()
                 .id(s.getId()).userId(s.getUserId()).username(username).problemId(s.getProblemId())
                 .contestId(s.getContestId())
+                .classroomId(s.getClassroomId())
+                .isLate(s.getIsLate())
                 .language(s.getLanguage()).status(s.getStatus())
                 .executionTime(s.getExecutionTime()).memoryUsed(s.getMemoryUsed())
                 .passedTests(s.getPassedTests()).totalTests(s.getTotalTests())
