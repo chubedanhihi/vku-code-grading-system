@@ -5,6 +5,7 @@ import {
   aiApi,
   ApiError,
   authApi,
+  classroomsApi,
   contestsApi,
   judgeApi,
   leaderboardApi,
@@ -23,6 +24,7 @@ import { SubmissionDetailModal } from "./components/SubmissionDetailModal";
 import { getVerdictMeta, LANG_META } from "./constants/languages";
 import { AddProblemPage } from "./pages/AddProblemPage";
 import { AuthPage } from "./pages/AuthPage";
+import { ClassroomsPage } from "./pages/ClassroomsPage";
 import { ContestsPage } from "./pages/ContestsPage";
 import { HomePage } from "./pages/HomePage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
@@ -32,13 +34,16 @@ import { ProfilePage } from "./pages/ProfilePage";
 import type {
   AiAnalyzeResponse,
   CheckerMode,
+  ClassroomView,
   ContestStandingRow,
   ContestView,
   Difficulty,
+  GradebookRow,
   JudgeStatus,
   Lang,
   LeaderboardEntry,
   Problem,
+  ProblemCommentView,
   ProfileStatsView,
   Submission,
   TestCase,
@@ -67,9 +72,17 @@ function App() {
 
   const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
   const [activeContestId, setActiveContestId] = useState<number | null>(null);
+  const [activeClassroomId, setActiveClassroomId] = useState<number | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [comments, setComments] = useState<ProblemCommentView[]>([]);
+  const [editorialInfo, setEditorialInfo] = useState<{ unlocked: boolean; editorial: string } | null>(null);
   const [subFilter, setSubFilter] = useState<"all" | "my">("all");
+
+  const [classrooms, setClassrooms] = useState<ClassroomView[]>([]);
+  const [classroomsLoading, setClassroomsLoading] = useState(false);
+  const [selectedClassroom, setSelectedClassroom] = useState<ClassroomView | null>(null);
+  const [gradebook, setGradebook] = useState<GradebookRow[]>([]);
 
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [lbLoading, setLbLoading] = useState(false);
@@ -207,6 +220,25 @@ function App() {
     }
   }, []);
 
+  const fetchClassrooms = useCallback(async () => {
+    try {
+      setClassroomsLoading(true);
+      setClassrooms(await classroomsApi.list());
+    } catch {
+      /* ignore */
+    } finally {
+      setClassroomsLoading(false);
+    }
+  }, []);
+
+  const fetchComments = useCallback(async (problemId: number) => {
+    try {
+      setComments(await problemsApi.comments(problemId));
+    } catch {
+      setComments([]);
+    }
+  }, []);
+
   const fetchProfile = useCallback(async () => {
     try {
       setProfileLoading(true);
@@ -301,17 +333,25 @@ function App() {
   };
 
   // Problem Selection + Draft restore
-  const handleSelectProblem = (prob: Problem, contestId: number | null = null) => {
+  const handleSelectProblem = (
+    prob: Problem,
+    contestId: number | null = null,
+    classroomId: number | null = null
+  ) => {
     setSelectedProblem(prob);
     setActiveContestId(contestId);
+    setActiveClassroomId(classroomId);
     setTestCases([]);
     setSubmissions([]);
+    setComments([]);
+    setEditorialInfo(null);
     setSubFilter("all");
     const saved = localStorage.getItem(draftKey(prob.id, lang));
     setCode(saved ?? LANG_META[lang].default);
     setView("submit");
     fetchTestCases(prob.id);
     fetchSubmissions(prob.id, "all", user);
+    fetchComments(prob.id);
   };
 
   const handleLangChange = (next: Lang) => {
@@ -437,6 +477,7 @@ function App() {
       const sub = await submissionsApi.submit({
         problemId: selectedProblem.id,
         contestId: activeContestId,
+        classroomId: activeClassroomId,
         language: lang,
         sourceCode: code,
       });
@@ -484,6 +525,9 @@ function App() {
     timeLimit: number;
     memoryLimit: number;
     checkerMode: CheckerMode;
+    tags: string;
+    studyPlan: string;
+    editorial: string;
   }) => {
     try {
       await problemsApi.create(payload);
@@ -504,6 +548,9 @@ function App() {
     timeLimit: number;
     memoryLimit: number;
     checkerMode: CheckerMode;
+    tags: string;
+    studyPlan: string;
+    editorial: string;
   }) => {
     if (!selectedProblem) return false;
     try {
@@ -600,6 +647,21 @@ function App() {
     }
   };
 
+  // Classroom actions
+  const handleSelectClassroom = async (id: number) => {
+    try {
+      const detail = await classroomsApi.detail(id);
+      setSelectedClassroom(detail);
+      if (isTeacher) {
+        setGradebook(await classroomsApi.gradebook(id));
+      } else {
+        setGradebook([]);
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Không tải được thông tin lớp học.");
+    }
+  };
+
   // Contest actions
   const handleSelectContest = async (id: number) => {
     try {
@@ -658,6 +720,11 @@ function App() {
           setView("leaderboard");
           fetchLeaderboard();
         }}
+        onOpenClassrooms={() => {
+          setSelectedClassroom(null);
+          setView("classrooms");
+          fetchClassrooms();
+        }}
         onOpenContests={() => {
           setSelectedContest(null);
           setView("contests");
@@ -704,16 +771,21 @@ function App() {
           <ProblemDetailPage
             problem={selectedProblem}
             contestId={activeContestId}
+            classroomId={activeClassroomId}
             user={user}
             testCases={testCases}
             submissions={submissions}
+            comments={comments}
+            editorialInfo={editorialInfo}
             subFilter={subFilter}
             lang={lang}
             code={code}
             submitting={submitting}
             judgingSub={judgingSub}
             liveProgress={liveProgress}
-            onBack={() => setView(activeContestId ? "contests" : "problems")}
+            onBack={() =>
+              setView(activeContestId ? "contests" : activeClassroomId ? "classrooms" : "problems")
+            }
             onLangChange={handleLangChange}
             onCodeChange={handleCodeChange}
             onResetCode={handleResetCode}
@@ -726,14 +798,119 @@ function App() {
             onRefreshSubs={() => fetchSubmissions(selectedProblem.id, subFilter, user)}
             onOpenSubDetail={handleOpenSubDetail}
             onAskAi={(sub) => handleAskAi(sub)}
+            onLoadEditorial={async () => {
+              try {
+                setEditorialInfo(await problemsApi.editorial(selectedProblem.id));
+              } catch {
+                setEditorialInfo({ unlocked: false, editorial: "" });
+              }
+            }}
+            onAddComment={async (content) => {
+              try {
+                await problemsApi.addComment(selectedProblem.id, content);
+                await fetchComments(selectedProblem.id);
+                return true;
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Không thể gửi bình luận.");
+                return false;
+              }
+            }}
+            onDeleteComment={async (cid) => {
+              try {
+                await problemsApi.deleteComment(cid);
+                await fetchComments(selectedProblem.id);
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Không thể xóa bình luận.");
+              }
+            }}
             onUpdateProblem={handleUpdateProblem}
             onCreateTestCase={handleCreateTestCase}
             onUpdateTestCase={handleUpdateTestCase}
             onDeleteTestCase={handleDeleteTestCase}
             onImportZip={handleImportZip}
             onExportZip={() => testCasesApi.exportZip(selectedProblem.id)}
+            onGenerateTests={async (payload) => {
+              try {
+                const res = await testCasesApi.generate(selectedProblem.id, payload);
+                await fetchTestCases(selectedProblem.id);
+                toast.success(`Đã sinh tự động ${res.generated} test case.`);
+                return true;
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Lỗi sinh test case.");
+                return false;
+              }
+            }}
             onCheckPlagiarism={() => problemsApi.plagiarism(selectedProblem.id)}
             onGoLogin={() => setView("login")}
+          />
+        )}
+
+        {view === "classrooms" && user && (
+          <ClassroomsPage
+            classrooms={classrooms}
+            selectedClassroom={selectedClassroom}
+            gradebook={gradebook}
+            problems={problems}
+            user={user}
+            loading={classroomsLoading}
+            onSelectClassroom={handleSelectClassroom}
+            onBackToList={() => setSelectedClassroom(null)}
+            onJoinByCode={async (joinCode) => {
+              try {
+                const joined = await classroomsApi.join(joinCode);
+                toast.success(`Đã tham gia lớp "${joined.name}"`);
+                fetchClassrooms();
+                handleSelectClassroom(joined.id);
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Không thể tham gia lớp.");
+              }
+            }}
+            onCreateClassroom={async (name, description) => {
+              try {
+                const c = await classroomsApi.create({ name, description });
+                toast.success(`Đã tạo lớp "${c.name}" (Mã: ${c.joinCode})`);
+                fetchClassrooms();
+                return true;
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Tạo lớp thất bại.");
+                return false;
+              }
+            }}
+            onDeleteClassroom={async (id) => {
+              if (!confirm("Xóa lớp học này?")) return;
+              try {
+                await classroomsApi.remove(id);
+                toast.success("Đã xóa lớp học.");
+                fetchClassrooms();
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Xóa thất bại.");
+              }
+            }}
+            onAddAssignment={async (cid, payload) => {
+              try {
+                await classroomsApi.addAssignment(cid, payload);
+                toast.success("Đã giao bài tập cho lớp.");
+                handleSelectClassroom(cid);
+                return true;
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Giao bài thất bại.");
+                return false;
+              }
+            }}
+            onRemoveAssignment={async (aid) => {
+              try {
+                await classroomsApi.removeAssignment(aid);
+                toast.success("Đã gỡ bài tập khỏi lớp.");
+                if (selectedClassroom) handleSelectClassroom(selectedClassroom.id);
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Xóa thất bại.");
+              }
+            }}
+            onExportCsv={(cid) => classroomsApi.exportCsv(cid)}
+            onOpenProblemInClass={(pid, cid) => {
+              const p = problems.find((x) => x.id === pid);
+              if (p) handleSelectProblem(p, null, cid);
+            }}
           />
         )}
 
@@ -827,6 +1004,7 @@ function App() {
         onNavigate={(v) => {
           if (v === "leaderboard") fetchLeaderboard();
           if (v === "contests") fetchContests();
+          if (v === "classrooms") fetchClassrooms();
           if (v === "profile") fetchProfile();
           setView(v);
         }}

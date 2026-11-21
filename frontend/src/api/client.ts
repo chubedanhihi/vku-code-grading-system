@@ -1,13 +1,16 @@
 import type {
   AiAnalyzeResponse,
   CheckerMode,
+  ClassroomView,
   ContestStandingRow,
   ContestView,
   Difficulty,
+  GradebookRow,
   JudgeStatus,
   LeaderboardEntry,
   PlagiarismMatch,
   Problem,
+  ProblemCommentView,
   ProfileStatsView,
   Role,
   RunCustomResponse,
@@ -137,6 +140,9 @@ export const problemsApi = {
     timeLimit: number;
     memoryLimit: number;
     checkerMode?: CheckerMode;
+    tags?: string;
+    studyPlan?: string;
+    editorial?: string;
   }) =>
     request<Problem>("/problems", {
       method: "POST",
@@ -151,6 +157,9 @@ export const problemsApi = {
       timeLimit: number;
       memoryLimit: number;
       checkerMode: CheckerMode;
+      tags?: string;
+      studyPlan?: string;
+      editorial?: string;
     }
   ) =>
     request<Problem>(`/problems/${id}`, {
@@ -159,6 +168,15 @@ export const problemsApi = {
     }),
   remove: (id: number) => request<void>(`/problems/${id}`, { method: "DELETE" }),
   plagiarism: (id: number) => request<PlagiarismMatch[]>(`/problems/${id}/plagiarism`),
+  editorial: (id: number) => request<{ unlocked: boolean; editorial: string }>(`/problems/${id}/editorial`),
+  comments: (id: number) => request<ProblemCommentView[]>(`/problems/${id}/comments`),
+  addComment: (id: number, content: string) =>
+    request<ProblemCommentView>(`/problems/${id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  deleteComment: (commentId: number) =>
+    request<void>(`/problems/comments/${commentId}`, { method: "DELETE" }),
 };
 
 export const testCasesApi = {
@@ -212,6 +230,21 @@ export const testCasesApi = {
     a.click();
     URL.revokeObjectURL(url);
   },
+  generate: (
+    problemId: number,
+    payload: {
+      count: number;
+      generatorLang: string;
+      generatorCode: string;
+      solutionLang: string;
+      solutionCode: string;
+      markFirstAsSample: boolean;
+    }
+  ) =>
+    request<{ success: boolean; generated: number }>(`/testcases/problem/${problemId}/generate`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
 
 export const submissionsApi = {
@@ -225,6 +258,7 @@ export const submissionsApi = {
   submit: (payload: {
     problemId: number;
     contestId?: number | null;
+    classroomId?: number | null;
     language: string;
     sourceCode: string;
   }) =>
@@ -296,4 +330,39 @@ export const aiApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+};
+
+export const classroomsApi = {
+  list: () => request<ClassroomView[]>("/classrooms"),
+  detail: (id: number) => request<ClassroomView>(`/classrooms/${id}`),
+  create: (payload: { name: string; description: string }) =>
+    request<ClassroomView>("/classrooms", { method: "POST", body: JSON.stringify(payload) }),
+  join: (joinCode: string) =>
+    request<ClassroomView>("/classrooms/join", { method: "POST", body: JSON.stringify({ joinCode }) }),
+  addAssignment: (
+    classroomId: number,
+    payload: { problemId: number; weekLabel: string; dueAt?: string | null; allowLate: boolean }
+  ) =>
+    request(`/classrooms/${classroomId}/assignments`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  removeAssignment: (assignmentId: number) =>
+    request<void>(`/classrooms/assignments/${assignmentId}`, { method: "DELETE" }),
+  remove: (id: number) => request<void>(`/classrooms/${id}`, { method: "DELETE" }),
+  gradebook: (id: number) => request<GradebookRow[]>(`/classrooms/${id}/gradebook`),
+  exportCsv: async (id: number) => {
+    const user = loadStoredUser();
+    const res = await fetch(`${API_BASE}/classrooms/${id}/export-csv`, {
+      headers: user?.token ? { Authorization: `Bearer ${user.token}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, "Không thể xuất bảng điểm CSV.");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `classroom-${id}-grades.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };

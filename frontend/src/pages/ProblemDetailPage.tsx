@@ -6,6 +6,7 @@ import type {
   Lang,
   PlagiarismMatch,
   Problem,
+  ProblemCommentView,
   RunCustomResponse,
   Submission,
   TestCase,
@@ -34,9 +35,12 @@ import {
 interface ProblemDetailPageProps {
   problem: Problem;
   contestId?: number | null;
+  classroomId?: number | null;
   user: UserProfile | null;
   testCases: TestCase[];
   submissions: Submission[];
+  comments: ProblemCommentView[];
+  editorialInfo: { unlocked: boolean; editorial: string } | null;
   subFilter: "all" | "my";
   lang: Lang;
   code: string;
@@ -53,6 +57,9 @@ interface ProblemDetailPageProps {
   onRefreshSubs: () => void;
   onOpenSubDetail: (id: number) => void;
   onAskAi: (sub?: Submission) => void;
+  onLoadEditorial: () => void;
+  onAddComment: (content: string) => Promise<boolean>;
+  onDeleteComment: (commentId: number) => Promise<void>;
   onUpdateProblem: (payload: {
     title: string;
     description: string;
@@ -60,6 +67,9 @@ interface ProblemDetailPageProps {
     timeLimit: number;
     memoryLimit: number;
     checkerMode: CheckerMode;
+    tags: string;
+    studyPlan: string;
+    editorial: string;
   }) => Promise<boolean>;
   onCreateTestCase: (
     input: string,
@@ -79,6 +89,14 @@ interface ProblemDetailPageProps {
   onDeleteTestCase: (id: number) => void;
   onImportZip: (file: File) => Promise<void>;
   onExportZip: () => Promise<void>;
+  onGenerateTests: (payload: {
+    count: number;
+    generatorLang: string;
+    generatorCode: string;
+    solutionLang: string;
+    solutionCode: string;
+    markFirstAsSample: boolean;
+  }) => Promise<boolean>;
   onCheckPlagiarism: () => Promise<PlagiarismMatch[]>;
   onGoLogin: () => void;
 }
@@ -86,9 +104,12 @@ interface ProblemDetailPageProps {
 export function ProblemDetailPage({
   problem,
   contestId,
+  classroomId,
   user,
   testCases,
   submissions,
+  comments,
+  editorialInfo,
   subFilter,
   lang,
   code,
@@ -105,15 +126,21 @@ export function ProblemDetailPage({
   onRefreshSubs,
   onOpenSubDetail,
   onAskAi,
+  onLoadEditorial,
+  onAddComment,
+  onDeleteComment,
   onUpdateProblem,
   onCreateTestCase,
   onUpdateTestCase,
   onDeleteTestCase,
   onImportZip,
   onExportZip,
+  onGenerateTests,
   onCheckPlagiarism,
   onGoLogin,
 }: ProblemDetailPageProps) {
+  const [leftTab, setLeftTab] = useState<"desc" | "editorial" | "discuss">("desc");
+  const [commentInput, setCommentInput] = useState("");
   // Split pane + Fullscreen + Font size
   const [leftPct, setLeftPct] = useState(46);
   const [fullscreen, setFullscreen] = useState(false);
@@ -145,6 +172,18 @@ export function ProblemDetailPage({
   const [edTl, setEdTl] = useState(problem.timeLimit);
   const [edMl, setEdMl] = useState(problem.memoryLimit);
   const [edChecker, setEdChecker] = useState<CheckerMode>(problem.checkerMode || "EXACT");
+  const [edTags, setEdTags] = useState(problem.tags || "");
+  const [edPlan, setEdPlan] = useState(problem.studyPlan || "");
+  const [edEditorial, setEdEditorial] = useState("");
+
+  // Auto Test Case Generator Modal
+  const [genOpen, setGenOpen] = useState(false);
+  const [genCount, setGenCount] = useState(5);
+  const [genCode, setGenCode] = useState(
+    `import random, sys\nseed = int(sys.stdin.read().strip() or 1)\nrandom.seed(seed)\nprint(random.randint(1, 1000), random.randint(1, 1000))`
+  );
+  const [solCode, setSolCode] = useState(`a, b = map(int, input().split())\nprint(a + b)`);
+  const [genLoading, setGenLoading] = useState(false);
 
   // Plagiarism Modal
   const [plagOpen, setPlagOpen] = useState(false);
@@ -160,6 +199,9 @@ export function ProblemDetailPage({
     setEdTl(problem.timeLimit);
     setEdMl(problem.memoryLimit);
     setEdChecker(problem.checkerMode || "EXACT");
+    setEdTags(problem.tags || "");
+    setEdPlan(problem.studyPlan || "");
+    setLeftTab("desc");
   }, [problem]);
 
   // Resizable divider drag handlers
@@ -239,8 +281,33 @@ export function ProblemDetailPage({
       timeLimit: edTl,
       memoryLimit: edMl,
       checkerMode: edChecker,
+      tags: edTags.trim(),
+      studyPlan: edPlan.trim(),
+      editorial: edEditorial,
     });
     if (ok) setEditOpen(false);
+  };
+
+  const handleGenerateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGenLoading(true);
+    const ok = await onGenerateTests({
+      count: genCount,
+      generatorLang: "PYTHON",
+      generatorCode: genCode,
+      solutionLang: "PYTHON",
+      solutionCode: solCode,
+      markFirstAsSample: testCases.length === 0,
+    });
+    setGenLoading(false);
+    if (ok) setGenOpen(false);
+  };
+
+  const handleCommentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentInput.trim()) return;
+    const ok = await onAddComment(commentInput.trim());
+    if (ok) setCommentInput("");
   };
 
   const handleOpenPlagiarism = async () => {
@@ -258,7 +325,7 @@ export function ProblemDetailPage({
       <div className="workspace-topbar" style={{ justifyContent: "space-between" }}>
         <button type="button" className="btn btn-ghost btn-sm" onClick={onBack}>
           <IconArrowLeft size={14} />
-          <span>{contestId ? "Quay lại kỳ thi" : "Danh sách bài tập"}</span>
+          <span>{contestId ? "Quay lại kỳ thi" : classroomId ? "Quay lại lớp học" : "Danh sách bài tập"}</span>
         </button>
 
         {isTeacher && (
@@ -287,7 +354,123 @@ export function ProblemDetailPage({
         {/* LEFT COLUMN */}
         {!fullscreen && (
           <div className="workspace-col">
-            <section className="surface-card">
+            <div className="seg-tabs" style={{ alignSelf: "flex-start" }}>
+              <button
+                type="button"
+                className={`seg-tab ${leftTab === "desc" ? "active" : ""}`}
+                onClick={() => setLeftTab("desc")}
+              >
+                Đề bài & Test
+              </button>
+              <button
+                type="button"
+                className={`seg-tab ${leftTab === "editorial" ? "active" : ""}`}
+                onClick={() => {
+                  setLeftTab("editorial");
+                  if (user) onLoadEditorial();
+                }}
+              >
+                Lời giải mẫu
+              </button>
+              <button
+                type="button"
+                className={`seg-tab ${leftTab === "discuss" ? "active" : ""}`}
+                onClick={() => setLeftTab("discuss")}
+              >
+                Thảo luận ({comments.length})
+              </button>
+            </div>
+
+            {leftTab === "editorial" && (
+              <section className="surface-card">
+                <div className="section-header">
+                  <h2 className="section-title">Lời giải mẫu (Editorial)</h2>
+                </div>
+                {!user ? (
+                  <div className="empty-state compact">
+                    <p>Đăng nhập và giải đúng (AC) bài tập này để mở khóa lời giải mẫu.</p>
+                  </div>
+                ) : !editorialInfo ? (
+                  <div className="loading-state">
+                    <div className="spinner" />
+                    <p>Đang kiểm tra...</p>
+                  </div>
+                ) : !editorialInfo.unlocked ? (
+                  <div className="empty-state compact">
+                    <p>🔒 Hãy giải đúng (ACCEPTED) bài này trước để mở khóa lời giải mẫu.</p>
+                  </div>
+                ) : !editorialInfo.editorial ? (
+                  <div className="empty-state compact">
+                    <p>Giảng viên chưa cập nhật lời giải mẫu cho bài này.</p>
+                  </div>
+                ) : (
+                  <FormattedMarkdown content={editorialInfo.editorial} />
+                )}
+              </section>
+            )}
+
+            {leftTab === "discuss" && (
+              <section className="surface-card">
+                <div className="section-header">
+                  <h2 className="section-title">Thảo luận ({comments.length})</h2>
+                </div>
+                {user ? (
+                  <form onSubmit={handleCommentSubmit} style={{ marginBottom: 14 }}>
+                    <div className="ai-ask-row">
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Đặt câu hỏi hoặc chia sẻ kinh nghiệm giải bài..."
+                        value={commentInput}
+                        onChange={(e) => setCommentInput(e.target.value)}
+                      />
+                      <button type="submit" className="btn btn-primary btn-sm" disabled={!commentInput.trim()}>
+                        Gửi
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="muted-note" style={{ marginBottom: 12 }}>
+                    Đăng nhập để tham gia thảo luận.
+                  </div>
+                )}
+
+                {comments.length === 0 ? (
+                  <div className="empty-state compact">
+                    <p>Chưa có bình luận nào.</p>
+                  </div>
+                ) : (
+                  <div className="tc-list">
+                    {comments.map((cm) => (
+                      <div key={cm.id} className="comment-card">
+                        <div className="tc-card-head">
+                          <span className="tc-label">
+                            <span>{cm.username}</span>
+                            {cm.role !== "STUDENT" && <span className="tag-pill sample">GV</span>}
+                          </span>
+                          {(isTeacher || user?.id === cm.userId) && (
+                            <button
+                              type="button"
+                              className="icon-btn danger"
+                              onClick={() => onDeleteComment(cm.id)}
+                            >
+                              <IconTrash size={12} />
+                            </button>
+                          )}
+                        </div>
+                        <p style={{ fontSize: "0.86rem", color: "var(--text-secondary)", whiteSpace: "pre-wrap" }}>
+                          {cm.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {leftTab === "desc" && (
+              <>
+                <section className="surface-card">
               <div className="problem-doc-header">
                 <h1 className="problem-doc-title">
                   <span className="mono" style={{ color: "var(--text-muted)", marginRight: 8 }}>
@@ -335,6 +518,15 @@ export function ProblemDetailPage({
                         e.target.value = "";
                       }}
                     />
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setGenOpen(true)}
+                      title="Sinh hàng loạt test bằng script + code mẫu"
+                    >
+                      <IconSparkles size={13} />
+                      <span>Sinh tự động</span>
+                    </button>
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
@@ -520,6 +712,8 @@ export function ProblemDetailPage({
                 </form>
               )}
             </section>
+              </>
+            )}
           </div>
         )}
 
@@ -915,12 +1109,104 @@ export function ProblemDetailPage({
                     </select>
                   </div>
                 </div>
+                <div className="tc-io-grid">
+                  <div className="form-group">
+                    <label className="form-label">Chủ đề (Tags)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={edTags}
+                      onChange={(e) => setEdTags(e.target.value)}
+                      placeholder="Array, Math, DP"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Lộ trình (Study Plan)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={edPlan}
+                      onChange={(e) => setEdPlan(e.target.value)}
+                      placeholder="Cơ bản năm nhất"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Lời giải mẫu (Editorial - tùy chọn)</label>
+                  <textarea
+                    className="form-textarea"
+                    rows={4}
+                    value={edEditorial}
+                    onChange={(e) => setEdEditorial(e.target.value)}
+                    placeholder="Để trống nếu giữ nguyên lời giải mẫu hiện tại..."
+                  />
+                </div>
                 <div className="form-actions-end">
                   <button type="button" className="btn btn-ghost" onClick={() => setEditOpen(false)}>
                     Hủy
                   </button>
                   <button type="submit" className="btn btn-primary">
                     Lưu thay đổi
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto Test Case Generator Modal */}
+      {genOpen && (
+        <div className="modal-overlay" onClick={() => setGenOpen(false)}>
+          <div className="modal-panel modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Sinh Test Case tự động (Stress / Random Generator)</h3>
+              <button type="button" className="icon-btn" onClick={() => setGenOpen(false)}>
+                <IconX size={16} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleGenerateSubmit}>
+                <div className="form-group">
+                  <label className="form-label">Số lượng test cần sinh (1–20)</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    style={{ width: 140 }}
+                    min={1}
+                    max={20}
+                    value={genCount}
+                    onChange={(e) => setGenCount(Number(e.target.value))}
+                  />
+                </div>
+                <div className="tc-io-grid">
+                  <div className="form-group">
+                    <label className="form-label">Script sinh Input (Python 3 — đọc seed từ stdin)</label>
+                    <textarea
+                      className="form-textarea mono"
+                      rows={6}
+                      value={genCode}
+                      onChange={(e) => setGenCode(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Code lời giải chuẩn (Python 3)</label>
+                    <textarea
+                      className="form-textarea mono"
+                      rows={6}
+                      value={solCode}
+                      onChange={(e) => setSolCode(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="form-actions-end">
+                  <button type="button" className="btn btn-ghost" onClick={() => setGenOpen(false)}>
+                    Hủy
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={genLoading}>
+                    {genLoading ? "Đang sinh test..." : `Sinh ${genCount} test case`}
                   </button>
                 </div>
               </form>

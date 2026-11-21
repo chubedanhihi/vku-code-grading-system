@@ -34,7 +34,10 @@ export function CommandPalette({
     { label: "Kỳ thi & Assignment", view: "contests" },
     { label: "Bảng xếp hạng", view: "leaderboard" },
   ];
-  if (user) basePages.push({ label: "Hồ sơ cá nhân", view: "profile" });
+  if (user) {
+    basePages.push({ label: "Lớp học phần (LMS)", view: "classrooms" });
+    basePages.push({ label: "Hồ sơ cá nhân", view: "profile" });
+  }
   if (user?.role === "TEACHER" || user?.role === "ADMIN") {
     basePages.push({ label: "Tạo bài tập mới", view: "add-problem" });
   }

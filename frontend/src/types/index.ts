@@ -7,6 +7,7 @@ export type View =
   | "problems"
   | "submit"
   | "add-problem"
+  | "classrooms"
   | "contests"
   | "profile"
   | "login"
@@ -29,6 +30,9 @@ export interface Problem {
   timeLimit: number;
   memoryLimit: number;
   checkerMode?: CheckerMode;
+  tags?: string;
+  studyPlan?: string;
+  hasEditorial?: boolean;
   createdBy?: number;
   createdAt: string;
   totalSubmissions?: number;
@@ -64,6 +68,8 @@ export interface Submission {
   username?: string;
   problemId: number;
   contestId?: number | null;
+  classroomId?: number | null;
+  isLate?: boolean;
   language: string;
   sourceCode?: string;
   status: string;
@@ -176,4 +182,48 @@ export interface JudgeStatus {
   workers: number;
   running: number;
   pending: number;
+}
+
+export interface AssignmentView {
+  id: number;
+  problemId: number;
+  title: string;
+  difficulty: Difficulty;
+  weekLabel: string;
+  dueAt?: string | null;
+  allowLate: boolean;
+  overdue: boolean;
+  myStatus: "SOLVED" | "LATE_SOLVED" | "ATTEMPTED" | "NONE";
+}
+
+export interface ClassroomView {
+  id: number;
+  name: string;
+  description: string;
+  joinCode: string;
+  teacherId: number;
+  teacherName: string;
+  memberCount: number;
+  assignmentCount: number;
+  joined: boolean;
+  assignments?: AssignmentView[];
+}
+
+export interface GradebookRow {
+  userId: number;
+  username: string;
+  email: string;
+  solvedCount: number;
+  totalScore: number;
+  statuses: Record<number, string>;
+}
+
+export interface ProblemCommentView {
+  id: number;
+  problemId: number;
+  userId: number;
+  username: string;
+  role: string;
+  content: string;
+  createdAt: string;
 }

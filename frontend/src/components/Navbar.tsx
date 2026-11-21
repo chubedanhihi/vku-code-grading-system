@@ -18,6 +18,7 @@ interface NavbarProps {
   hasSelectedProblem: boolean;
   judgeStatus: JudgeStatus | null;
   onOpenLeaderboard: () => void;
+  onOpenClassrooms: () => void;
   onOpenContests: () => void;
   onOpenProfile: () => void;
   onOpenPalette: () => void;
@@ -31,6 +32,7 @@ export function Navbar({
   hasSelectedProblem,
   judgeStatus,
   onOpenLeaderboard,
+  onOpenClassrooms,
   onOpenContests,
   onOpenProfile,
   onOpenPalette,
@@ -71,6 +73,18 @@ export function Navbar({
               <IconList size={15} />
               <span>Bài tập</span>
             </button>
+
+            {user && (
+              <button
+                id="nav-classrooms"
+                type="button"
+                className={`nav-tab ${view === "classrooms" ? "active" : ""}`}
+                onClick={onOpenClassrooms}
+              >
+                <IconCode size={15} />
+                <span>Lớp học</span>
+              </button>
+            )}
 
             <button
               id="nav-contests"
