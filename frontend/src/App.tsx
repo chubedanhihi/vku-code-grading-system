@@ -823,6 +823,18 @@ function App() {
                 toast.error(err instanceof ApiError ? err.message : "Không thể xóa bình luận.");
               }
             }}
+            onLikeComment={async (cid) => {
+              if (!user) {
+                toast.error("Vui lòng đăng nhập để thả tim bình luận.");
+                return;
+              }
+              try {
+                await problemsApi.likeComment(cid);
+                await fetchComments(selectedProblem.id);
+              } catch (err) {
+                toast.error(err instanceof ApiError ? err.message : "Không thể thả tim.");
+              }
+            }}
             onUpdateProblem={handleUpdateProblem}
             onCreateTestCase={handleCreateTestCase}
             onUpdateTestCase={handleUpdateTestCase}

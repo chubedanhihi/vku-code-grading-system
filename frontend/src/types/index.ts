@@ -225,5 +225,7 @@ export interface ProblemCommentView {
   username: string;
   role: string;
   content: string;
+  likes?: number;
+  liked?: boolean;
   createdAt: string;
 }
