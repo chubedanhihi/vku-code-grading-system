@@ -177,6 +177,10 @@ export const problemsApi = {
     }),
   deleteComment: (commentId: number) =>
     request<void>(`/problems/comments/${commentId}`, { method: "DELETE" }),
+  likeComment: (commentId: number) =>
+    request<{ commentId: number; likes: number; liked: boolean }>(`/problems/comments/${commentId}/like`, {
+      method: "POST",
+    }),
 };
 
 export const testCasesApi = {

@@ -24,6 +24,9 @@ public class ProblemComment {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "likes")
+    private Integer likes = 0;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

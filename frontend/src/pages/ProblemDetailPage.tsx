@@ -32,6 +32,31 @@ import {
   IconX,
 } from "../components/Icons";
 
+function formatTimeAgo(dateStr: string): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diffSec < 60) return "vừa xong";
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} phút trước`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours} giờ trước`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) return `${diffDays} ngày trước`;
+    return d.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 interface ProblemDetailPageProps {
   problem: Problem;
   contestId?: number | null;
@@ -60,6 +85,7 @@ interface ProblemDetailPageProps {
   onLoadEditorial: () => void;
   onAddComment: (content: string) => Promise<boolean>;
   onDeleteComment: (commentId: number) => Promise<void>;
+  onLikeComment: (commentId: number) => Promise<void>;
   onUpdateProblem: (payload: {
     title: string;
     description: string;
@@ -129,6 +155,7 @@ export function ProblemDetailPage({
   onLoadEditorial,
   onAddComment,
   onDeleteComment,
+  onLikeComment,
   onUpdateProblem,
   onCreateTestCase,
   onUpdateTestCase,
@@ -445,22 +472,49 @@ export function ProblemDetailPage({
                       <div key={cm.id} className="comment-card">
                         <div className="tc-card-head">
                           <span className="tc-label">
-                            <span>{cm.username}</span>
+                            <span style={{ fontWeight: 600 }}>{cm.username}</span>
                             {cm.role !== "STUDENT" && <span className="tag-pill sample">GV</span>}
+                            {cm.createdAt && (
+                              <span className="comment-time" title={new Date(cm.createdAt).toLocaleString("vi-VN")}>
+                                • {formatTimeAgo(cm.createdAt)}
+                              </span>
+                            )}
                           </span>
                           {(isTeacher || user?.id === cm.userId) && (
                             <button
                               type="button"
                               className="icon-btn danger"
                               onClick={() => onDeleteComment(cm.id)}
+                              title="Xóa bình luận"
                             >
                               <IconTrash size={12} />
                             </button>
                           )}
                         </div>
-                        <p style={{ fontSize: "0.86rem", color: "var(--text-secondary)", whiteSpace: "pre-wrap" }}>
+                        <p style={{ fontSize: "0.86rem", color: "var(--text-secondary)", whiteSpace: "pre-wrap", margin: "6px 0 10px" }}>
                           {cm.content}
                         </p>
+                        <div className="comment-footer">
+                          <button
+                            type="button"
+                            className={`btn-like ${cm.liked ? "liked" : ""}`}
+                            onClick={() => onLikeComment(cm.id)}
+                            title={cm.liked ? "Bỏ thích" : "Thả tim"}
+                          >
+                            <span>{cm.liked ? "❤️" : "🤍"}</span>
+                            <span>{cm.likes || 0}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-reply"
+                            onClick={() => {
+                              setCommentInput(`@${cm.username} `);
+                            }}
+                            title="Trả lời thảo luận"
+                          >
+                            💬 Trả lời
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

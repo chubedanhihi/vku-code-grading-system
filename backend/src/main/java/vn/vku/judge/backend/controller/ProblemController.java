@@ -8,10 +8,12 @@ import org.springframework.web.bind.annotation.*;
 import vn.vku.judge.backend.dto.ProblemSummaryView;
 import vn.vku.judge.backend.entity.Problem;
 import vn.vku.judge.backend.entity.ProblemComment;
+import vn.vku.judge.backend.entity.ProblemCommentLike;
 import vn.vku.judge.backend.entity.Submission;
 import vn.vku.judge.backend.entity.User;
 import vn.vku.judge.backend.exception.ApiException;
 import vn.vku.judge.backend.judge.Verdict;
+import vn.vku.judge.backend.repository.ProblemCommentLikeRepository;
 import vn.vku.judge.backend.repository.ProblemCommentRepository;
 import vn.vku.judge.backend.repository.ProblemRepository;
 import vn.vku.judge.backend.repository.SubmissionRepository;
@@ -22,6 +24,7 @@ import vn.vku.judge.backend.security.Public;
 import vn.vku.judge.backend.security.RequireRole;
 import vn.vku.judge.backend.service.PlagiarismService;
 import vn.vku.judge.backend.service.PlagiarismService.PlagiarismMatch;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -35,17 +38,20 @@ public class ProblemController {
     private final ProblemRepository problemRepository;
     private final SubmissionRepository submissionRepository;
     private final ProblemCommentRepository commentRepository;
+    private final ProblemCommentLikeRepository commentLikeRepository;
     private final UserRepository userRepository;
     private final PlagiarismService plagiarismService;
 
     public ProblemController(ProblemRepository problemRepository,
                              SubmissionRepository submissionRepository,
                              ProblemCommentRepository commentRepository,
+                             ProblemCommentLikeRepository commentLikeRepository,
                              UserRepository userRepository,
                              PlagiarismService plagiarismService) {
         this.problemRepository = problemRepository;
         this.submissionRepository = submissionRepository;
         this.commentRepository = commentRepository;
+        this.commentLikeRepository = commentLikeRepository;
         this.userRepository = userRepository;
         this.plagiarismService = plagiarismService;
     }
@@ -59,6 +65,8 @@ public class ProblemController {
         private String username;
         private String role;
         private String content;
+        private Integer likes;
+        private Boolean liked;
         private LocalDateTime createdAt;
     }
 
@@ -141,11 +149,19 @@ public class ProblemController {
 
     @Public
     @GetMapping("/{id}/comments")
-    public List<CommentView> getComments(@PathVariable Long id) {
+    public List<CommentView> getComments(@PathVariable Long id, HttpServletRequest req) {
+        AuthUser viewer = AuthInterceptor.current(req).orElse(null);
         List<ProblemComment> list = commentRepository.findByProblemIdOrderByIdDesc(id);
         Set<Long> uids = list.stream().map(ProblemComment::getUserId).collect(Collectors.toSet());
         Map<Long, User> users = userRepository.findAllById(uids).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
+
+        Set<Long> commentIds = list.stream().map(ProblemComment::getId).collect(Collectors.toSet());
+        Set<Long> likedCommentIds = (viewer != null && !commentIds.isEmpty())
+                ? commentLikeRepository.findByUserIdAndCommentIdIn(viewer.id(), commentIds).stream()
+                    .map(ProblemCommentLike::getCommentId).collect(Collectors.toSet())
+                : Collections.emptySet();
+
         return list.stream().map(c -> {
             User u = users.get(c.getUserId());
             return CommentView.builder()
@@ -155,6 +171,8 @@ public class ProblemController {
                     .username(u != null ? u.getUsername() : "User #" + c.getUserId())
                     .role(u != null ? u.getRole() : "STUDENT")
                     .content(c.getContent())
+                    .likes(c.getLikes() != null ? c.getLikes() : 0)
+                    .liked(likedCommentIds.contains(c.getId()))
                     .createdAt(c.getCreatedAt())
                     .build();
         }).toList();
@@ -172,13 +190,45 @@ public class ProblemController {
         c.setProblemId(id);
         c.setUserId(u.id());
         c.setContent(body.getContent().trim());
+        c.setLikes(0);
         ProblemComment saved = commentRepository.save(c);
         return CommentView.builder()
                 .id(saved.getId()).problemId(id).userId(u.id())
                 .username(u.username()).role(u.role()).content(saved.getContent())
+                .likes(0).liked(false)
                 .createdAt(saved.getCreatedAt()).build();
     }
 
+    @Transactional
+    @PostMapping("/comments/{commentId}/like")
+    public Map<String, Object> toggleLikeComment(@PathVariable Long commentId, HttpServletRequest req) {
+        AuthUser u = AuthInterceptor.current(req).orElseThrow(() -> ApiException.unauthorized("Chưa đăng nhập."));
+        ProblemComment c = commentRepository.findById(commentId)
+                .orElseThrow(() -> ApiException.notFound("Không tìm thấy bình luận."));
+
+        Optional<ProblemCommentLike> existing = commentLikeRepository.findByCommentIdAndUserId(commentId, u.id());
+        boolean liked;
+        if (existing.isPresent()) {
+            commentLikeRepository.delete(existing.get());
+            int cur = c.getLikes() != null ? c.getLikes() : 1;
+            c.setLikes(Math.max(0, cur - 1));
+            liked = false;
+        } else {
+            commentLikeRepository.save(new ProblemCommentLike(commentId, u.id()));
+            int cur = c.getLikes() != null ? c.getLikes() : 0;
+            c.setLikes(cur + 1);
+            liked = true;
+        }
+        commentRepository.save(c);
+
+        return Map.of(
+                "commentId", commentId,
+                "likes", c.getLikes(),
+                "liked", liked
+        );
+    }
+
+    @Transactional
     @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<Void> deleteComment(@PathVariable Long commentId, HttpServletRequest req) {
         AuthUser u = AuthInterceptor.current(req).orElseThrow(() -> ApiException.unauthorized("Chưa đăng nhập."));
@@ -187,6 +237,7 @@ public class ProblemController {
         if (!u.isTeacher() && !u.id().equals(c.getUserId())) {
             throw ApiException.forbidden("Bạn không có quyền xóa bình luận này.");
         }
+        commentLikeRepository.deleteByCommentId(commentId);
         commentRepository.deleteById(commentId);
         return ResponseEntity.noContent().build();
     }
