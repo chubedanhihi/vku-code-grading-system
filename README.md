@@ -76,6 +76,17 @@ Script sẽ tự động khởi động:
 
 Truy cập hệ thống tại: **[http://localhost:5173/](http://localhost:5173/)**
 
+### Quản trị Cơ sở Dữ liệu (MySQL & phpMyAdmin Web GUI)
+- **phpMyAdmin Web UI:** **[http://localhost:8085/](http://localhost:8085/)** (quản lý trực quan 13 bảng dữ liệu trên trình duyệt).
+- **Kết nối trực tiếp qua DBeaver / Navicat / DataGrip:**
+  - Host: `localhost` | Port: `3307` | Database: `vku_judge`
+  - Username: `root` | Password: `rootpassword`
+- **Các file kịch bản SQL dữ liệu mẫu:**
+  - `database/init.sql`: Khởi tạo cấu trúc bảng.
+  - `database/seed_demo_students.sql`: 11 tài khoản sinh viên và 1 giảng viên.
+  - `database/seed_extended_demo.sql`: 10 bài tập mở rộng (tổng 13 bài), 10 lớp học LMS, 5 kỳ thi lập trình.
+  - `database/seed_comments_and_results.sql`: 15 bình luận thảo luận và 76 kết quả test case chi tiết.
+
 ---
 
 ## 🛡️ Judge Engine (Backend)
